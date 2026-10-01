@@ -1,0 +1,321 @@
+### Assets Inventory API - example flows
+### Works with the REST Client extension (VS Code / JetBrains) or the IntelliJ HTTP client.
+### Start the stack first: docker compose up -d && pnpm db:migrate && pnpm dev
+### Also start the audit worker in a second terminal: pnpm worker:audit
+
+@base = http://localhost:3000
+@image = ./example-image.png
+
+### Every request except login needs the session cookie: run the sign-in flow first.
+### It sets a cookie jar, so later requests reuse the session automatically.
+
+### 0. Authentication ---------------------------------------------------------
+
+### Sign in as the SUPERADMIN (create one with: pnpm auth:create-superadmin)
+# @name login
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ana.ribeiro@example.com",
+  "password": "SuperSecretDev123!"
+}
+
+### Who am I? (role + hasPassword, no secrets)
+GET {{base}}/api/auth/me
+Accept: application/json
+
+### Wrong password -> 401 (unknown email returns the same message)
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ana.ribeiro@example.com",
+  "password": "wrong-password"
+}
+
+### Sign out everywhere: bumps sessionVersion, so old cookies stop working
+POST {{base}}/api/auth/logout
+Accept: application/json
+
+### Change your own password (>= 12 chars, keeps this device signed in)
+POST {{base}}/api/auth/change-password
+Content-Type: application/json
+
+{
+  "currentPassword": "SuperSecretDev123!",
+  "newPassword": "AnotherStrongDev123!"
+}
+
+### Signing in is required -> 401 UNAUTHENTICATED
+GET {{base}}/api/assets
+Accept: application/json
+
+### RBAC: a USER may read but not write -> 403 FORBIDDEN
+POST {{base}}/api/asset-types
+Content-Type: application/json
+
+{
+  "name": "Docking Station",
+  "code": "DCK"
+}
+
+### 1. Asset types -------------------------------------------------------------
+
+### List existing types (the seed creates Laptop, Printer, Router, Monitor)
+GET {{base}}/api/asset-types
+Accept: application/json
+
+### Create a type (ADMIN+)
+# @name createType
+POST {{base}}/api/asset-types
+Content-Type: application/json
+
+{
+  "name": "Docking Station",
+  "code": "DCK"
+}
+
+### Duplicate code -> 409 CONFLICT
+POST {{base}}/api/asset-types
+Content-Type: application/json
+
+{
+  "name": "Another Dock",
+  "code": "DCK"
+}
+
+### Invalid code -> 400 with field details
+POST {{base}}/api/asset-types
+Content-Type: application/json
+
+{
+  "name": "Bad Code",
+  "code": "TOOLONG"
+}
+
+### Rename a type (ADMIN+; code is locked once assets exist -> 409)
+PATCH {{base}}/api/asset-types/REPLACE_WITH_TYPE_ID
+Content-Type: application/json
+
+{
+  "name": "Docking Stations"
+}
+
+### 2. Assets ------------------------------------------------------------------
+
+### Create an asset (ADMIN+): assetId is generated (IT-DCK-0001)
+# @name createAsset
+POST {{base}}/api/assets
+Content-Type: application/json
+
+{
+  "assetType": "DCK",
+  "description": "WD19TB Thunderbolt dock",
+  "unit": 1,
+  "serialNumber": "SN-DCK-0001"
+}
+
+### Bulk item: several assets may have no serial number (empty string -> null)
+POST {{base}}/api/assets
+Content-Type: application/json
+
+{
+  "assetType": "DCK",
+  "description": "Spare USB-C cables (box of 10)",
+  "unit": 10,
+  "serialNumber": ""
+}
+
+### Duplicate serial number -> 409 CONFLICT
+POST {{base}}/api/assets
+Content-Type: application/json
+
+{
+  "assetType": "DCK",
+  "description": "Clashing serial",
+  "serialNumber": "SN-DCK-0001"
+}
+
+### Search + filter (case-insensitive), paginated
+GET {{base}}/api/assets?page=1&pageSize=20&q=dock&type=DCK&status=AVAILABLE
+Accept: application/json
+
+### Fetch one asset by human assetId (what a QR scan resolves) - includes history
+GET {{base}}/api/assets/IT-DCK-0001
+Accept: application/json
+
+### Update fields (ADMIN+; an ASSIGNER may send only {"status": ...}, assetId is immutable and ASSIGNED cannot be set here)
+PATCH {{base}}/api/assets/IT-DCK-0001
+Content-Type: application/json
+
+{
+  "description": "WD19TB Thunderbolt dock (replaced cable)"
+}
+
+### 3. Images ------------------------------------------------------------------
+
+### Upload / replace the single image (ADMIN+) (jpeg, png or webp, max 5 MB, magic bytes checked)
+POST {{base}}/api/assets/IT-DCK-0001/image
+Content-Type: multipart/form-data; boundary=----Boundary
+
+--Boundary
+Content-Disposition: form-data; name="file"; filename="dock.png"
+Content-Type: image/png
+
+< ./example-image.png
+--Boundary--
+
+### Read the presigned imageUrl from the response above and download the object
+GET {{base}}/api/assets/IT-DCK-0001
+Accept: application/json
+
+### Remove the image (ADMIN+; object deleted from MinIO, imageKey cleared)
+DELETE {{base}}/api/assets/IT-DCK-0001/image
+
+### 4. QR code ------------------------------------------------------------------
+
+### PNG (inline)
+GET {{base}}/api/assets/IT-DCK-0001/qr
+Accept: image/png
+
+### SVG
+GET {{base}}/api/assets/IT-DCK-0001/qr?format=svg
+Accept: image/svg+xml
+
+### Attachment with filename IT-DCK-0001.png
+GET {{base}}/api/assets/IT-DCK-0001/qr?download=1
+
+### 5. Staff -------------------------------------------------------------------
+
+### Create staff (SUPERADMIN only). role: USER | ASSIGNER | ADMIN, plus a >= 12 char password
+# @name createStaff
+POST {{base}}/api/staff
+Content-Type: application/json
+
+{
+  "name": "Diogo Alves",
+  "department": "IT",
+  "email": "diogo.alves@example.com",
+  "phone": "+351 912 000 111",
+  "role": "ASSIGNER",
+  "password": "correct-horse-battery"
+}
+
+### Duplicate email -> 409 CONFLICT
+POST {{base}}/api/staff
+Content-Type: application/json
+
+{
+  "name": "Someone Else",
+  "department": "IT",
+  "email": "diogo.alves@example.com"
+}
+
+### Search staff
+GET {{base}}/api/staff?q=it&page=1&pageSize=20
+Accept: application/json
+
+### Staff detail with currently assigned assets
+GET {{base}}/api/staff/REPLACE_WITH_STAFF_ID
+
+### Update staff: change the role, or reset somebody's password (revokes their sessions)
+PATCH {{base}}/api/staff/REPLACE_WITH_STAFF_ID
+Content-Type: application/json
+
+{
+  "phone": "+351 999 000 111",
+  "role": "ADMIN",
+  "password": "brand-new-password"
+}
+
+### The SUPERADMIN account cannot be edited or deleted through the API -> 403
+PATCH {{base}}/api/staff/REPLACE_WITH_SUPERADMIN_ID
+Content-Type: application/json
+
+{
+  "name": "renamed"
+}
+
+### 6. Assignments -------------------------------------------------------------
+
+### Hand an asset to staff (ASSIGNER+; assigners may only target USER/ASSIGNER, never themselves)
+# @name createAssignment
+POST {{base}}/api/assignments
+Content-Type: application/json
+
+{
+  "assetId": "IT-DCK-0001",
+  "staffId": "REPLACE_WITH_STAFF_ID",
+  "note": "loan for workshop"
+}
+
+### Same asset again -> 409 (already has an active assignment)
+POST {{base}}/api/assignments
+Content-Type: application/json
+
+{
+  "assetId": "IT-DCK-0001",
+  "staffId": "REPLACE_WITH_STAFF_ID"
+}
+
+### Active assignments only
+GET {{base}}/api/assignments?active=true&assetId=IT-DCK-0001
+Accept: application/json
+
+### Assets currently held by a staff member
+GET {{base}}/api/assets?assignedTo=REPLACE_WITH_STAFF_ID
+
+### Delete staff while holding assets -> 409 CONFLICT
+DELETE {{base}}/api/staff/REPLACE_WITH_STAFF_ID
+
+### Record the return: asset goes back to AVAILABLE
+POST {{base}}/api/assignments/REPLACE_WITH_ASSIGNMENT_ID/return
+Accept: application/json
+
+### Returning twice -> 422 UNPROCESSABLE
+POST {{base}}/api/assignments/REPLACE_WITH_ASSIGNMENT_ID/return
+
+### 7. Soft delete --------------------------------------------------------------
+
+### Retire an asset (ADMIN+; image kept, nothing hard-deleted) -> 409 while assigned
+DELETE {{base}}/api/assets/IT-DCK-0001
+Accept: application/json
+
+### Confirm the assignment history survived
+GET {{base}}/api/assets/IT-DCK-0001
+Accept: application/json
+
+### 8. Audit trail -------------------------------------------------------------
+
+### Every action above was queued and written by the worker (pnpm worker:audit).
+### SUPERADMIN only: rows contain actor emails and client IPs.
+GET {{base}}/api/audit-logs?pageSize=10
+Accept: application/json
+
+### Filter by action, entity type, actor search or time window
+GET {{base}}/api/audit-logs?action=ASSIGNMENT_CREATED
+Accept: application/json
+
+###
+GET {{base}}/api/audit-logs?entityType=STAFF
+Accept: application/json
+
+###
+GET {{base}}/api/audit-logs?q=role
+Accept: application/json
+
+### from/to are ISO-8601 bounds on occurredAt
+GET {{base}}/api/audit-logs?from=2026-01-01T00:00:00Z&to=2030-01-01T00:00:00Z&pageSize=20
+Accept: application/json
+
+### Everything an account did
+GET {{base}}/api/audit-logs?q=ana.ribeiro@example.com
+Accept: application/json
+
+### Failed sign-ins and refused actions
+GET {{base}}/api/audit-logs?action=AUTHORIZATION_DENIED
+Accept: application/json
+
+### Reading it needs SUPERADMIN; a USER gets 403 (and the denial is itself audited)
+### Run this signed in as a non-superadmin to see it.

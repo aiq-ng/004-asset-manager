@@ -1,0 +1,6 @@
+
+> @c54/tokens@0.1.0 build /home/aiq/003001013-c54-news/packages/tokens
+> node style-dictionary.config.js
+
+Building @c54/tokens...
+Done. Output in ./build/

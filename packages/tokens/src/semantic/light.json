@@ -1,0 +1,81 @@
+{
+  "color": {
+    "bg": {
+      "surface": { "$value": "{color.gray.50}" },
+      "card": { "$value": "{color.white}" },
+      "elevated": { "$value": "{color.white}" },
+      "muted": { "$value": "{color.gray.100}" },
+      "accent": { "$value": "{color.blue.50}" },
+      "danger": { "$value": "{color.red.50}" },
+      "success": { "$value": "{color.green.50}" },
+      "warning": { "$value": "{color.amber.50}" }
+    },
+    "text": {
+      "primary": { "$value": "{color.ink.600}" },
+      "secondary": { "$value": "{color.gray.600}" },
+      "muted": { "$value": "{color.gray.500}" },
+      "inverse": { "$value": "{color.white}" },
+      "accent": { "$value": "{color.blue.600}" },
+      "danger": { "$value": "{color.red.600}" },
+      "success": { "$value": "{color.green.700}" },
+      "warning": { "$value": "{color.amber.600}" }
+    },
+    "border": {
+      "default": { "$value": "{color.gray.200}" },
+      "strong": { "$value": "{color.gray.300}" },
+      "accent": { "$value": "{color.blue.200}" },
+      "danger": { "$value": "{color.red.200}" }
+    },
+    "action": {
+      "primary": { "$value": "{color.blue.600}" },
+      "primary-hover": { "$value": "{color.blue.700}" },
+      "primary-fg": { "$value": "{color.white}" },
+      "danger": { "$value": "{color.red.600}" },
+      "danger-hover": { "$value": "{color.red.700}" },
+      "danger-fg": { "$value": "{color.white}" },
+      "ghost-hover": { "$value": "{color.gray.100}" }
+    },
+    "status": {
+      "live": { "$value": "{color.red.600}" },
+      "live-badge": { "$value": "{color.red.600}" },
+      "developing": { "$value": "{color.amber.600}" },
+      "confirmed": { "$value": "{color.green.700}" },
+      "hearing": { "$value": "{color.amber.600}" },
+      "unverified": { "$value": "{color.gray.500}" },
+      "healthy": { "$value": "{color.green.700}" },
+      "degraded": { "$value": "{color.amber.600}" },
+      "down": { "$value": "{color.red.600}" },
+      "fast-track": { "$value": "{color.signal.fast-track}" },
+      "wire": { "$value": "{color.signal.wire}" },
+      "draft": { "$value": "{color.signal.draft}" },
+      "published": { "$value": "{color.signal.published}" },
+      "correction": { "$value": "{color.signal.correction}" }
+    },
+    "masthead": {
+      "bg": { "$value": "{color.red.600}" },
+      "fg": { "$value": "{color.white}" }
+    },
+    "chrome": {
+      "bg": { "$value": "{color.ink.700}" },
+      "fg": { "$value": "{color.white}" }
+    }
+  },
+  "space": {
+    "gap": { "$value": "{space.3}" },
+    "section": { "$value": "{space.8}" },
+    "pad": { "$value": "{space.4}" },
+    "pad-lg": { "$value": "{space.6}" }
+  },
+  "radius": {
+    "default": { "$value": "{radius.lg}" },
+    "card": { "$value": "{radius.xl}" },
+    "button": { "$value": "{radius.lg}" },
+    "pill": { "$value": "{radius.full}" },
+    "input": { "$value": "{radius.md}" }
+  },
+  "shadow": {
+    "popover": { "$value": "0 12px 32px rgba(0, 0, 0, 0.5)" },
+    "dialog": { "$value": "0 30px 90px rgba(0, 0, 0, 0.55)" },
+    "command": { "$value": "0 20px 60px rgba(0, 0, 0, 0.55)" }
+  }
+}

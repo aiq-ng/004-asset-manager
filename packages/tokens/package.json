@@ -1,0 +1,25 @@
+{
+  "name": "@c54/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.js",
+      "default": "./build/index.js",
+      "types": "./build/index.d.ts"
+    },
+    "./css": "./build/css-variables.css",
+    "./tailwind": "./build/tailwind-tokens.js",
+    "./nativewind": "./build/nativewind-tokens.js"
+  },
+  "scripts": {
+    "build": "node style-dictionary.config.js",
+    "clean": "rm -rf build"
+  },
+  "devDependencies": {
+    "style-dictionary": "^4.3.3"
+  }
+}

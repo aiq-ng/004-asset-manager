@@ -1,0 +1,28 @@
+{
+  "button": {
+    "bg": {
+      "primary": { "$value": "{color.action.primary}" },
+      "primary-hover": { "$value": "{color.action.primary-hover}" },
+      "danger": { "$value": "{color.action.danger}" },
+      "danger-hover": { "$value": "{color.action.danger-hover}" },
+      "ghost": { "$value": "transparent" },
+      "ghost-hover": { "$value": "{color.action.ghost-hover}" },
+      "secondary": { "$value": "{color.bg.muted}" }
+    },
+    "fg": {
+      "primary": { "$value": "{color.action.primary-fg}" },
+      "danger": { "$value": "{color.action.danger-fg}" },
+      "ghost": { "$value": "{color.text.primary}" },
+      "secondary": { "$value": "{color.text.primary}" }
+    },
+    "border": {
+      "default": { "$value": "{color.border.default}" },
+      "focus": { "$value": "{color.blue.400}" }
+    },
+    "radius": { "$value": "{radius.button}" },
+    "font": {
+      "weight": { "$value": "{font.weight.semibold}" },
+      "size": { "$value": "{font.size.sm}" }
+    }
+  }
+}

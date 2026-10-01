@@ -1,0 +1,55 @@
+{
+  "$description": "Measured editorial — warm paper tones, serif headlines, generous spacing, calm signals",
+  "light": {
+    "color": {
+      "bg": {
+        "surface": { "$value": "#faf7f1" },
+        "card": { "$value": "#fffdf9" },
+        "muted": { "$value": "#f4efe6" }
+      },
+      "text": {
+        "primary": { "$value": "#1c1a17" },
+        "secondary": { "$value": "#6c6458" }
+      },
+      "border": {
+        "default": { "$value": "#e4ded2" }
+      },
+      "action": {
+        "primary": { "$value": "#9e1b32" }
+      },
+      "status": {
+        "live": { "$value": "#9e1b32" }
+      },
+      "masthead": {
+        "bg": { "$value": "#9e1b32" },
+        "fg": { "$value": "{color.white}" }
+      }
+    }
+  },
+  "dark": {},
+  "space": {
+    "gap": { "$value": "{space.4}" },
+    "section": { "$value": "{space.10}" },
+    "pad": { "$value": "{space.5}" },
+    "pad-lg": { "$value": "{space.6}" }
+  },
+  "radius": {
+    "default": { "$value": "{radius.sm}" },
+    "card": { "$value": "{radius.base}" },
+    "button": { "$value": "{radius.sm}" }
+  },
+  "font": {
+    "family": {
+      "heading": { "$value": "'Source Serif 4', Georgia, serif" }
+    },
+    "weight": {
+      "heading": { "$value": "{font.weight.bold}" }
+    },
+    "letterSpacing": {
+      "heading": { "$value": "{font.letterSpacing.normal}" }
+    }
+  },
+  "density": {
+    "mode": { "$value": "measured" }
+  }
+}

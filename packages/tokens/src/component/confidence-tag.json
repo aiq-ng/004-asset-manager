@@ -1,0 +1,15 @@
+{
+  "confidence-tag": {
+    "bg": {
+      "confirmed": { "$value": "{color.status.confirmed}" },
+      "hearing": { "$value": "{color.status.hearing}" },
+      "unverified": { "$value": "{color.status.unverified}" }
+    },
+    "fg": {
+      "confirmed": { "$value": "{color.white}" },
+      "hearing": { "$value": "{color.ink.600}" },
+      "unverified": { "$value": "{color.white}" }
+    },
+    "radius": { "$value": "{radius.pill}" }
+  }
+}

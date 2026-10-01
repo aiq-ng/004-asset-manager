@@ -1,0 +1,19 @@
+{
+  "color": {
+    "blue": { "50": { "$value": "#EEF2FF" }, "100": { "$value": "#D4DFFE" }, "200": { "$value": "#A9BFFD" }, "300": { "$value": "#7E9FFC" }, "400": { "$value": "#5380FB" }, "500": { "$value": "#2860FA" }, "600": { "$value": "#2F5FE0" }, "700": { "$value": "#0E2FA8" }, "800": { "$value": "#0B2480" }, "900": { "$value": "#071958" } },
+    "red": { "50": { "$value": "#FDECEC" }, "100": { "$value": "#FBD3D4" }, "200": { "$value": "#F7A7A9" }, "300": { "$value": "#F37B7E" }, "400": { "$value": "#EF4F53" }, "500": { "$value": "#EB2328" }, "600": { "$value": "#E31E24" }, "700": { "$value": "#B0161B" }, "800": { "$value": "#850F14" }, "900": { "$value": "#5A0A0D" } },
+    "green": { "50": { "$value": "#E8F6EE" }, "100": { "$value": "#C5EAD3" }, "200": { "$value": "#8DD5A7" }, "300": { "$value": "#55C07B" }, "400": { "$value": "#2DAB5A" }, "500": { "$value": "#12A150" }, "600": { "$value": "#0F8A4C" }, "700": { "$value": "#0B6B3A" }, "800": { "$value": "#074D29" }, "900": { "$value": "#042F19" } },
+    "amber": { "50": { "$value": "#FDF3E3" }, "100": { "$value": "#FAE5C0" }, "200": { "$value": "#F5CB81" }, "300": { "$value": "#F0B142" }, "400": { "$value": "#ED9E13" }, "500": { "$value": "#D48B0A" }, "600": { "$value": "#B26A00" }, "700": { "$value": "#8A5200" }, "800": { "$value": "#623A00" }, "900": { "$value": "#3A2200" } },
+    "gray": { "50": { "$value": "#F8F9FA" }, "100": { "$value": "#F1F3F6" }, "200": { "$value": "#E4E7EF" }, "300": { "$value": "#D1D5DE" }, "400": { "$value": "#A0A7B5" }, "500": { "$value": "#6E7686" }, "600": { "$value": "#5B6472" }, "700": { "$value": "#444C58" }, "800": { "$value": "#2D333D" }, "900": { "$value": "#1A1F27" } },
+    "ink": { "50": { "$value": "#E8E9EC" }, "100": { "$value": "#C5C7CD" }, "200": { "$value": "#8B909B" }, "300": { "$value": "#5B6169" }, "400": { "$value": "#3A4049" }, "500": { "$value": "#1A2233" }, "600": { "$value": "#0B1020" }, "700": { "$value": "#080C18" }, "800": { "$value": "#050810" }, "900": { "$value": "#030508" } },
+    "white": { "$value": "#FFFFFF" },
+    "black": { "$value": "#000000" },
+    "signal": {
+      "fast-track": { "$value": "#2f5ee0" },
+      "wire": { "$value": "#EF9E28" },
+      "draft": { "$value": "#434654" },
+      "published": { "$value": "#1F9254" },
+      "correction": { "$value": "#B73C3B" }
+    }
+  }
+}

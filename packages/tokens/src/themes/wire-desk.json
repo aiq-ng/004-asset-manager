@@ -1,0 +1,55 @@
+{
+  "$description": "Wire desk — bold red masthead, dense grid, fast and urgent 24/7 news",
+  "light": {
+    "color": {
+      "bg": {
+        "surface": { "$value": "{color.gray.50}" },
+        "card": { "$value": "{color.white}" },
+        "muted": { "$value": "{color.gray.100}" }
+      },
+      "text": {
+        "primary": { "$value": "{color.ink.600}" },
+        "secondary": { "$value": "{color.gray.600}" }
+      },
+      "border": {
+        "default": { "$value": "{color.gray.200}" }
+      },
+      "action": {
+        "primary": { "$value": "{color.blue.600}" }
+      },
+      "status": {
+        "live": { "$value": "{color.red.600}" }
+      },
+      "masthead": {
+        "bg": { "$value": "{color.red.600}" },
+        "fg": { "$value": "{color.white}" }
+      }
+    }
+  },
+  "dark": {},
+  "space": {
+    "gap": { "$value": "{space.2}" },
+    "section": { "$value": "{space.6}" },
+    "pad": { "$value": "{space.3}" },
+    "pad-lg": { "$value": "{space.4}" }
+  },
+  "radius": {
+    "default": { "$value": "{radius.base}" },
+    "card": { "$value": "{radius.lg}" },
+    "button": { "$value": "{radius.md}" }
+  },
+  "font": {
+    "family": {
+      "heading": { "$value": "'Geist', system-ui, sans-serif" }
+    },
+    "weight": {
+      "heading": { "$value": "{font.weight.extrabold}" }
+    },
+    "letterSpacing": {
+      "heading": { "$value": "{font.letterSpacing.tight}" }
+    }
+  },
+  "density": {
+    "mode": { "$value": "dense" }
+  }
+}

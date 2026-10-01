@@ -1,0 +1,155 @@
+@import "@c54/tokens/css";
+
+/*
+ * Tailwind v4 bridge for the @c54/tokens design tokens.
+ *
+ * The token package ships raw CSS custom properties that are scoped to a theme
+ * attribute, so it emits nothing until the document opts in. Set the theme on
+ * the root element (see src/app/layout.tsx):
+ *
+ *   <html data-c54-theme="wire-desk">              -> light mode
+ *   <html data-c54-theme="wire-desk" data-c54-mode="dark">
+ *
+ * Available themes: wire-desk (default), visual-led, measured-editorial.
+ *
+ * Every token is exposed through `@theme inline`, which keeps the generated
+ * utilities pointing at `var(--c54-*)` so switching themes at runtime updates
+ * the whole UI without a rebuild. All names are prefixed with `c54-` to stay
+ * out of Tailwind's default namespaces.
+ *
+ * Primitive ramps (--c54-color-gray-100, --c54-space-4, --c54-opacity-60)
+ * stay available as plain custom properties.
+ */
+
+@theme inline {
+  /* Surfaces */
+  --color-c54-bg-surface: var(--c54-color-bg-surface);
+  --color-c54-bg-card: var(--c54-color-bg-card);
+  --color-c54-bg-elevated: var(--c54-color-bg-elevated);
+  --color-c54-bg-muted: var(--c54-color-bg-muted);
+  --color-c54-bg-accent: var(--c54-color-bg-accent);
+  --color-c54-bg-danger: var(--c54-color-bg-danger);
+  --color-c54-bg-success: var(--c54-color-bg-success);
+  --color-c54-bg-warning: var(--c54-color-bg-warning);
+  --color-c54-bg-inverse: var(--c54-color-ink-600);
+  --color-c54-masthead-bg: var(--c54-color-masthead-bg);
+  --color-c54-masthead-fg: var(--c54-color-masthead-fg);
+  --color-c54-chrome-bg: var(--c54-color-chrome-bg);
+  --color-c54-chrome-fg: var(--c54-color-chrome-fg);
+
+  /* Text */
+  --color-c54-text-primary: var(--c54-color-text-primary);
+  --color-c54-text-secondary: var(--c54-color-text-secondary);
+  --color-c54-text-muted: var(--c54-color-text-muted);
+  --color-c54-text-inverse: var(--c54-color-text-inverse);
+  --color-c54-text-accent: var(--c54-color-text-accent);
+  --color-c54-text-danger: var(--c54-color-text-danger);
+  --color-c54-text-success: var(--c54-color-text-success);
+  --color-c54-text-warning: var(--c54-color-text-warning);
+
+  /* Borders */
+  --color-c54-border-default: var(--c54-color-border-default);
+  --color-c54-border-strong: var(--c54-color-border-strong);
+  --color-c54-border-accent: var(--c54-color-border-accent);
+  --color-c54-border-danger: var(--c54-color-border-danger);
+
+  /* Actions */
+  --color-c54-action-primary: var(--c54-color-action-primary);
+  --color-c54-action-primary-hover: var(--c54-color-action-primary-hover);
+  --color-c54-action-primary-fg: var(--c54-color-action-primary-fg);
+  --color-c54-action-danger: var(--c54-color-action-danger);
+  --color-c54-action-danger-hover: var(--c54-color-action-danger-hover);
+  --color-c54-action-danger-fg: var(--c54-color-action-danger-fg);
+  --color-c54-action-ghost-hover: var(--c54-color-action-ghost-hover);
+
+  /* Status */
+  --color-c54-status-healthy: var(--c54-color-status-healthy);
+  --color-c54-status-degraded: var(--c54-color-status-degraded);
+  --color-c54-status-down: var(--c54-color-status-down);
+  --color-c54-status-live: var(--c54-color-status-live);
+  --color-c54-status-draft: var(--c54-color-status-draft);
+  --color-c54-status-published: var(--c54-color-status-published);
+
+  /* Signals */
+  --color-c54-signal-fast-track: var(--c54-color-signal-fast-track);
+  --color-c54-signal-wire: var(--c54-color-signal-wire);
+  --color-c54-signal-draft: var(--c54-color-signal-draft);
+  --color-c54-signal-published: var(--c54-color-signal-published);
+  --color-c54-signal-correction: var(--c54-color-signal-correction);
+
+  /* Radii */
+  --radius-c54-sm: var(--c54-radius-sm);
+  --radius-c54-base: var(--c54-radius-base);
+  --radius-c54-md: var(--c54-radius-md);
+  --radius-c54-lg: var(--c54-radius-lg);
+  --radius-c54-xl: var(--c54-radius-xl);
+  --radius-c54-2xl: var(--c54-radius-2xl);
+  --radius-c54-3xl: var(--c54-radius-3xl);
+  --radius-c54-full: var(--c54-radius-full);
+  --radius-c54-default: var(--c54-radius-default);
+  --radius-c54-card: var(--c54-radius-card);
+  --radius-c54-button: var(--c54-radius-button);
+  --radius-c54-pill: var(--c54-radius-pill);
+  --radius-c54-input: var(--c54-radius-input);
+
+  /* Spacing */
+  --spacing-c54-1: var(--c54-space-1);
+  --spacing-c54-2: var(--c54-space-2);
+  --spacing-c54-3: var(--c54-space-3);
+  --spacing-c54-4: var(--c54-space-4);
+  --spacing-c54-5: var(--c54-space-5);
+  --spacing-c54-6: var(--c54-space-6);
+  --spacing-c54-8: var(--c54-space-8);
+  --spacing-c54-10: var(--c54-space-10);
+  --spacing-c54-12: var(--c54-space-12);
+  --spacing-c54-16: var(--c54-space-16);
+  --spacing-c54-gap: var(--c54-space-gap);
+  --spacing-c54-section: var(--c54-space-section);
+  --spacing-c54-pad: var(--c54-space-pad);
+  --spacing-c54-pad-lg: var(--c54-space-pad-lg);
+
+  /* Font families */
+  --font-c54-display: var(--c54-font-family-heading);
+  --font-c54-sans: var(--c54-font-family-body);
+  --font-c54-mono: var(--c54-font-family-mono);
+  --font-c54-serif: var(--c54-font-family-serif);
+
+  /* Font sizes */
+  --text-c54-2xs: var(--c54-font-size-2xs);
+  --text-c54-xs: var(--c54-font-size-xs);
+  --text-c54-sm: var(--c54-font-size-sm);
+  --text-c54-base: var(--c54-font-size-base);
+  --text-c54-lg: var(--c54-font-size-lg);
+  --text-c54-xl: var(--c54-font-size-xl);
+  --text-c54-2xl: var(--c54-font-size-2xl);
+  --text-c54-3xl: var(--c54-font-size-3xl);
+  --text-c54-4xl: var(--c54-font-size-4xl);
+  --text-c54-5xl: var(--c54-font-size-5xl);
+  --text-c54-hero: var(--c54-font-size-hero);
+
+  /* Weights */
+  --font-weight-c54-heading: var(--c54-font-weight-heading);
+
+  /* Line heights */
+  --leading-c54-tight: var(--c54-font-lineHeight-tight);
+  --leading-c54-snug: var(--c54-font-lineHeight-snug);
+  --leading-c54-normal: var(--c54-font-lineHeight-normal);
+  --leading-c54-relaxed: var(--c54-font-lineHeight-relaxed);
+  --leading-c54-loose: var(--c54-font-lineHeight-loose);
+
+  /* Letter spacing */
+  --tracking-c54-tight: var(--c54-font-letterSpacing-tight);
+  --tracking-c54-normal: var(--c54-font-letterSpacing-normal);
+  --tracking-c54-wide: var(--c54-font-letterSpacing-wide);
+  --tracking-c54-wider: var(--c54-font-letterSpacing-wider);
+  --tracking-c54-widest: var(--c54-font-letterSpacing-widest);
+  --tracking-c54-heading: var(--c54-font-letterSpacing-heading);
+
+  /* Shadows */
+  --shadow-c54-popover: var(--c54-shadow-popover);
+  --shadow-c54-dialog: var(--c54-shadow-dialog);
+  --shadow-c54-command: var(--c54-shadow-command);
+
+  /* Border width */
+  --default-border-width: var(--c54-border-1);
+}
