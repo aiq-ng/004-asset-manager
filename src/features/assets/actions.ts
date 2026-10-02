@@ -6,6 +6,7 @@ import { unstable_rethrow } from "next/navigation";
 import { defineAction, toFailure } from "@/lib/server/define-action";
 import {
   createAsset,
+  createAssetsInBulk,
   removeAssetImage,
   replaceAssetImage,
   retireAsset,
@@ -14,6 +15,8 @@ import {
 import { createAssignment, returnAssignment } from "@/lib/services/assignments";
 import { parseUploadedImage } from "@/lib/services/images";
 import {
+  bulkAssetEntrySchema,
+  bulkAssetSubmitSchema,
   createAssetSchema,
   updateAssetSchema,
   updateAssetStatusSchema,
@@ -54,6 +57,51 @@ export const createAssetAction = defineAction(
     // Land on the record just created; redirecting also means a reload cannot
     // resubmit the form.
     redirect: (created) => `/assets/${created.assetId}`,
+  },
+);
+
+/**
+ * Creates one row of a batch register.
+ *
+ * The difference from `createAssetAction` is the absence of a `redirect`. That
+ * action lands on the new record so a reload cannot resubmit; here the sheet has
+ * to stay open for the next of the person's items, and a redirect would throw
+ * the sheet away after the first save and strand them at item one of twenty.
+ * `revalidate` stays on, so every save re-renders the register behind the sheet
+ * and the row appears as it is entered.
+ *
+ * `unit` is pinned to 1 here rather than trusted from the client: the quantity in
+ * this flow is the number of rows being entered, and each of those rows is a
+ * single physical item.
+ */
+export const createBulkAssetEntryAction = defineAction(
+  bulkAssetEntrySchema,
+  (input) => createAsset({ ...input, unit: 1 }),
+  {
+    route: "action:createBulkAssetEntry",
+    permission: "asset:manage",
+    successMessage: "Item registered.",
+  },
+);
+
+/**
+ * Registers the whole filled-in column in one submission.
+ *
+ * `createBulkAssetEntryAction` is the durable path — one item, saved, impossible
+ * to lose. This is the fast path for someone who has the sheet in front of them:
+ * they type every serial, press Submit once, and the register fills in a single
+ * round trip instead of a hundred.
+ *
+ * No redirect, for the same reason: the sheet still has to show what was created
+ * and what was refused, which is the whole point of the response.
+ */
+export const submitBulkAssetEntryAction = defineAction(
+  bulkAssetSubmitSchema,
+  (input) => createAssetsInBulk(input),
+  {
+    route: "action:submitBulkAssetEntry",
+    permission: "asset:manage",
+    successMessage: "Registered.",
   },
 );
 

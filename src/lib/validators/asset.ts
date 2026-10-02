@@ -39,6 +39,59 @@ export const createAssetSchema = z.object({
   status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
 });
 
+/**
+ * One row of a batch register: a single physical item being entered.
+ *
+ * Deliberately has no `unit` field. In this flow the quantity the person typed
+ * up front is a *count of rows to enter*, not a per-row quantity — so every asset
+ * created this way is one item and stores `unit: 1`. Accepting `unit` here would
+ * let a client set it to something the sheet never asked for, and `.strict()`
+ * turns that into a visible 400 instead of a value silently dropped on the floor.
+ *
+ * `serialNumber` is the only thing that genuinely varies between rows of the same
+ * batch, which is why each save carries its own.
+ */
+export const bulkAssetEntrySchema = z
+  .object({
+    /** Asset type code (LAP) or id. Shared by every row in the batch. */
+    assetType: z.string().trim().min(1, "assetType is required").max(64),
+    description: z.string().trim().min(1, "description is required").max(500, "description must be <= 500 characters"),
+    /** Optional; "" and whitespace are stored as NULL. */
+    serialNumber: optionalTrimmedString.optional(),
+    status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
+  })
+  .strict();
+
+/** How many items one batch register may cover. */
+export const BULK_ASSET_ENTRY_MAX = 500;
+
+/**
+ * A whole column of serials submitted in one go.
+ *
+ * Blank entries are dropped rather than rejected. The sheet renders one input per
+ * item, so a half-filled column legitimately submits empty strings, and refusing
+ * the batch over the gaps somebody has not reached yet would make it impossible
+ * to submit early. Emptiness is a UI concern here; the server only cares about the
+ * serials that were actually filled in.
+ */
+export const bulkAssetSubmitSchema = z
+  .object({
+    /** Asset type code (LAP) or id. Shared by every row in the batch. */
+    assetType: z.string().trim().min(1, "assetType is required").max(64),
+    description: z
+      .string()
+      .trim()
+      .min(1, "description is required")
+      .max(500, "description must be <= 500 characters"),
+    /** In the order they should be created, so asset ids run down the column. */
+    serials: z
+      .array(z.string().trim().max(120, "serial must be <= 120 characters"))
+      .max(BULK_ASSET_ENTRY_MAX * 2, "too many rows submitted")
+      .transform((values) => values.filter((value) => value.length > 0))
+      .refine((values) => values.length > 0, "Enter at least one serial number"),
+  })
+  .strict();
+
 export const updateAssetSchema = z
   .object({
     description: z
@@ -73,5 +126,6 @@ export const assetIdParamSchema = z.object({
 
 export type ListAssetsQuery = z.infer<typeof listAssetsQuerySchema>;
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
+export type BulkAssetSubmitInput = z.infer<typeof bulkAssetSubmitSchema>;
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
 export type UpdateAssetStatusInput = z.infer<typeof updateAssetStatusSchema>;

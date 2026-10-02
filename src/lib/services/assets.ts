@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/serializers";
 import { reserveAssetId } from "@/lib/services/asset-id";
 import type {
+  BulkAssetSubmitInput,
   CreateAssetInput,
   ListAssetsQuery,
   UpdateAssetInput,
@@ -99,6 +100,137 @@ export async function getAsset(idOrAssetId: string): Promise<AssetDetailDto> {
   if (!asset) throw ApiError.notFound(`Asset ${idOrAssetId} not found`);
 
   return toAssetDetailDto(asset, await signImage(asset.imageKey));
+}
+
+/** One serial that could not be registered, and why. */
+export interface SkippedAsset {
+  serial: string;
+  reason: string;
+}
+
+export interface CreatedAsset {
+  assetId: string;
+  /** Which serial this asset was created for, so the two can always be paired. */
+  serial: string;
+}
+
+export interface BulkAssetResult {
+  created: CreatedAsset[];
+  skipped: SkippedAsset[];
+}
+
+/**
+ * Registers a whole column of serials at once.
+ *
+ * Conflicts are found *before* anything is written, rather than by catching the
+ * unique violation as it happens. Two reasons, both practical:
+ *
+ * - A failed statement aborts the surrounding Postgres transaction, so letting one
+ *   duplicate raise would roll back the other ninety-nine. Screening first means
+ *   the write transaction only ever runs statements that succeed.
+ * - The person gets told exactly which serials were refused and why, instead of a
+ *   generic failure for the whole batch. Registering ninety of a hundred is far
+ *   more useful than registering none and asking them to find the typo.
+ *
+ * The check is a single `IN` query rather than one lookup per serial, so a hundred
+ * rows cost one extra round trip rather than a hundred.
+ *
+ * Duplicates *within* the submitted column are caught the same way: a serial typed
+ * twice on the sheet would otherwise fail against the row the same submission just
+ * created. The first occurrence wins, so the asset ids still run down the column
+ * in the order the person read them off.
+ */
+export async function createAssetsInBulk(input: BulkAssetSubmitInput): Promise<BulkAssetResult> {
+  const assetType = await prisma.assetType.findFirst({
+    where: {
+      OR: [
+        { code: { equals: input.assetType, mode: "insensitive" } },
+        { id: input.assetType },
+      ],
+    },
+  });
+
+  if (!assetType) {
+    throw ApiError.unprocessable(`Unknown asset type "${input.assetType}"`);
+  }
+
+  const skipped: SkippedAsset[] = [];
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  for (const serial of input.serials) {
+    if (seen.has(serial)) {
+      skipped.push({ serial, reason: "Entered more than once in this batch" });
+      continue;
+    }
+    seen.add(serial);
+    candidates.push(serial);
+  }
+
+  const existing = await prisma.asset.findMany({
+    where: { serialNumber: { in: candidates } },
+    select: { serialNumber: true },
+  });
+  const taken = new Set(existing.map((row) => row.serialNumber));
+
+  const accepted = candidates.filter((serial) => {
+    if (!taken.has(serial)) return true;
+    skipped.push({ serial, reason: "Already on the register" });
+    return false;
+  });
+
+  const created: CreatedAsset[] = [];
+
+  if (accepted.length > 0) {
+    try {
+      created.push(
+        ...(await prisma.$transaction(async (tx) => {
+          const rows: CreatedAsset[] = [];
+          for (const serialNumber of accepted) {
+            const assetId = await reserveAssetId(tx, assetType.id, assetType.code);
+            const row = await tx.asset.create({
+              data: {
+                assetId,
+                assetTypeId: assetType.id,
+                description: input.description,
+                // One physical item per row: the quantity in this flow is the
+                // number of rows being entered, not a per-row count.
+                unit: 1,
+                serialNumber,
+                status: "AVAILABLE",
+              },
+              select: { assetId: true },
+            });
+            rows.push({ assetId: row.assetId, serial: serialNumber });
+          }
+          return rows;
+        })),
+      );
+    } catch (error) {
+      throw fromPrismaError(error, "create assets");
+    }
+  }
+
+  // One audit event for the batch rather than one per row: a hundred-asset entry
+  // would otherwise bury every other event in the trail under a hundred identical
+  // "created asset" lines. The ids are on the event, so the detail is still there.
+  await recordAudit({
+    action: AUDIT_ACTIONS.ASSET_CREATED,
+    entityType: "ASSET",
+    entityId: created[0]?.assetId ?? assetType.id,
+    summary: `Registered ${created.length} asset${created.length === 1 ? "" : "s"} (${assetType.code})${
+      skipped.length > 0 ? `, ${skipped.length} skipped` : ""
+    }`,
+    metadata: {
+      assetType: assetType.code,
+      description: input.description,
+      count: created.length,
+      assets: created,
+      skipped,
+    },
+  });
+
+  return { created, skipped };
 }
 
 export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {

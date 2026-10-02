@@ -9,6 +9,10 @@ import {
   RegisterAssetTrigger,
 } from "@/features/assets/register-asset-trigger";
 import {
+  BulkAssetEntryButtonFallback,
+  BulkAssetEntryTrigger,
+} from "@/features/assets/bulk-asset-trigger";
+import {
   AssetEmptyState,
   AssetTable,
   AssetTableShell,
@@ -68,9 +72,17 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
         description="Everything on the register, with live status and who is holding it."
         actions={
           can(actor.role, "asset:manage") ? (
-            <Suspense fallback={<RegisterAssetButtonFallback />}>
-              <RegisterAssetTrigger assetTypes={assetTypes} />
-            </Suspense>
+            <>
+              {/* Both fallbacks are rendered together so the pair reserves its
+                  final width; a single suspense boundary here would let the
+                  outline button land under the primary one and shift the row. */}
+              <Suspense fallback={<RegisterAssetButtonFallback />}>
+                <RegisterAssetTrigger assetTypes={assetTypes} />
+              </Suspense>
+              <Suspense fallback={<BulkAssetEntryButtonFallback />}>
+                <BulkAssetEntryTrigger assetTypes={assetTypes} />
+              </Suspense>
+            </>
           ) : null
         }
       />

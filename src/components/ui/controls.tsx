@@ -1,3 +1,5 @@
+import type { RefAttributes } from "react";
+
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -18,7 +20,15 @@ export const CONTROL_BASE =
 export const CONTROL_INVALID =
   "border-c54-border-danger focus:border-c54-action-danger focus:ring-c54-action-danger/25";
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement>,
+    /**
+     * `ref` is accepted explicitly for the same reason it is on `Checkbox`: some
+     * callers need the element itself rather than its value — focusing the next
+     * field of a repeating entry, for instance, which cannot be done from the
+     * React tree alone.
+     */
+    RefAttributes<HTMLInputElement> {
   invalid?: boolean;
   /** Rendered inside the field, on the right. */
   trailing?: React.ReactNode;
