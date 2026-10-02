@@ -126,7 +126,18 @@ async function main() {
   if (oldest) {
     await prisma.staff.update({ where: { email: oldest.email }, data });
   } else {
-    await prisma.staff.create({ data: { ...data, department: "IT" } });
+    // Creating from scratch means the register has no departments yet, so there is
+    // nothing to point the account at. The first department is created here rather
+    // than assumed: inventing an "Unassigned" bucket would let a real department
+    // be misspelled later and nobody would notice, because the bucket would
+    // always be there to fall back into.
+    const department = await prisma.department.upsert({
+      where: { name: "IT" },
+      update: {},
+      create: { name: "IT" },
+    });
+
+    await prisma.staff.create({ data: { ...data, departmentId: department.id } });
   }
 
   console.log(`\nDone. ${data.email} is now the superadmin and can sign in via POST /api/auth/login.`);

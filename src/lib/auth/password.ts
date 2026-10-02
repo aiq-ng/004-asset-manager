@@ -21,7 +21,9 @@ const KEY_LENGTH = 64;
 const SALT_LENGTH = 16;
 const CURRENT_COST = { keylen: KEY_LENGTH, saltLength: SALT_LENGTH };
 
-export const MIN_PASSWORD_LENGTH = 12;
+// Re-exported so server-side callers have one obvious import; the value itself
+// lives in a module with no Node builtins, so client forms can use it too.
+export { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(CURRENT_COST.saltLength);

@@ -27,7 +27,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
       id: true,
       name: true,
       email: true,
-      department: true,
+      department: { select: { name: true } },
       role: true,
       sessionVersion: true,
     },
@@ -40,7 +40,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     id: staff.id,
     name: staff.name,
     email: staff.email,
-    department: staff.department,
+    department: staff.department.name,
     role: staff.role,
   };
 });

@@ -1,7 +1,13 @@
 import { z } from "zod";
 
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 import { optionalTrimmedString, paginationSchema } from "@/lib/validators/common";
+
+/**
+ * Every role the backend can hold. The list filter matches on all of them;
+ * `assignableRoleSchema` is the narrower set a superadmin may hand out.
+ */
+export const STAFF_ROLES = ["USER", "ASSIGNER", "ADMIN", "SUPERADMIN"] as const;
 
 /**
  * Roles a superadmin may hand out. SUPERADMIN is absent on purpose: it is only
@@ -15,14 +21,25 @@ const passwordSchema = z
   .max(200, "password must be <= 200 characters");
 
 export const listStaffQuerySchema = paginationSchema.extend({
-  role: assignableRoleSchema.optional(),
+  /**
+   * Every role, not just the assignable ones. `SUPERADMIN` is excluded from
+   * `assignableRoleSchema` because it must never be handed out, but those
+   * accounts do appear in the register, so the list filter has to match them —
+   * otherwise selecting one leaves the results unchanged and looks broken.
+   */
+  role: z.enum(STAFF_ROLES).optional(),
   q: z
     .string()
     .trim()
     .min(1, "q must not be empty")
     .max(120, "q must be <= 120 characters")
     .optional(),
-  department: z.string().trim().min(1).max(120).optional(),
+  /**
+   * A department id rather than a name. The form picks from the list maintained
+   * in /departments, so the value is always one the database already knows about
+   * and the free-text spellings of a department cannot reappear.
+   */
+  departmentId: z.string().trim().min(1).max(64).optional(),
 });
 
 export const createStaffSchema = z.object({
@@ -31,11 +48,11 @@ export const createStaffSchema = z.object({
     .trim()
     .min(1, "name is required")
     .max(120, "name must be <= 120 characters"),
-  department: z
+  departmentId: z
     .string()
     .trim()
     .min(1, "department is required")
-    .max(120, "department must be <= 120 characters"),
+    .max(64, "department must be <= 64 characters"),
   email: z
     .string()
     .trim()
@@ -56,11 +73,11 @@ export const updateStaffSchema = z
       .min(1, "name is required")
       .max(120, "name must be <= 120 characters")
       .optional(),
-    department: z
+    departmentId: z
       .string()
       .trim()
       .min(1, "department is required")
-      .max(120, "department must be <= 120 characters")
+      .max(64, "department must be <= 64 characters")
       .optional(),
     email: z
       .string()

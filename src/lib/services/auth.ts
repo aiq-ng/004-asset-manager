@@ -31,7 +31,7 @@ export async function login(email: string, password: string): Promise<LoginResul
       id: true,
       name: true,
       email: true,
-      department: true,
+      department: { select: { name: true } },
       role: true,
       passwordHash: true,
       sessionVersion: true,
@@ -89,7 +89,7 @@ export async function login(email: string, password: string): Promise<LoginResul
       id: staff.id,
       name: staff.name,
       email: staff.email,
-      department: staff.department,
+      department: staff.department.name,
       role: staff.role,
     },
   });
@@ -98,7 +98,7 @@ export async function login(email: string, password: string): Promise<LoginResul
     id: staff.id,
     name: staff.name,
     email: staff.email,
-    department: staff.department,
+    department: staff.department.name,
     role: staff.role,
   };
 }

@@ -1,20 +1,502 @@
 @import "tailwindcss";
 @import "./theme.css";
 
-:root {
-  --background: var(--c54-color-bg-surface);
-  --foreground: var(--c54-color-text-primary);
+/*
+ * App-level styling on top of the `@c54/tokens` bridge in theme.css.
+ * Everything here either maps a token into a Tailwind namespace (`@theme`) or
+ * describes the base look of the document (`@layer base`). Component classes
+ * live next to the components themselves.
+ */
+
+@theme {
+  /* Elevation below the three dialog-grade shadows the token package ships.
+     Derived from the `ink` ramp so they follow the theme's palette.
+
+     Each step is two layers — a tight contact shadow that reads as the edge
+     closest to the page, and a wide soft one for the ambient falloff. A single
+     blur looks like a blurred border rather than an object lifted off the page;
+     the pair is what makes the separation read as depth. `xl` is the heaviest
+     step that still sits under the token package's `popover` shadow, and is what
+     a card on an empty page needs in order to look placed rather than pasted. */
+  --shadow-c54-xs: 0 1px 2px 0 rgb(11 16 32 / 0.06), 0 1px 1px 0 rgb(11 16 32 / 0.04);
+  --shadow-c54-sm: 0 2px 6px -1px rgb(11 16 32 / 0.10), 0 1px 2px 0 rgb(11 16 32 / 0.06);
+  --shadow-c54-md: 0 4px 12px -2px rgb(11 16 32 / 0.10), 0 2px 5px -3px rgb(11 16 32 / 0.07);
+  --shadow-c54-lg: 0 12px 26px -8px rgb(11 16 32 / 0.16), 0 5px 10px -6px rgb(11 16 32 / 0.10);
+  --shadow-c54-xl: 0 28px 56px -20px rgb(11 16 32 / 0.24), 0 10px 18px -12px rgb(11 16 32 / 0.14);
+
+  --animate-fade-in: fade-in var(--c54-duration-fast) var(--c54-ease-out) both;
+  --animate-fade-out: fade-out var(--c54-duration-fast) var(--c54-ease-out) both;
+  --animate-rise: rise var(--c54-duration-base) var(--c54-ease-out) both;
+  --animate-slide-in: slide-in var(--c54-duration-base) var(--c54-ease-out) both;
+  --animate-sheet-in: sheet-in var(--c54-duration-slow) var(--c54-ease-out) both;
+  --animate-sheet-out: sheet-out var(--c54-duration-base) var(--c54-ease-in-out) both;
+  /* The right-hand sheet travels its own width rather than nudging, so it reads
+     as a panel arriving from off-canvas instead of a centred dialog scaling. */
+  --animate-sheet-in-right: sheet-in-right var(--c54-duration-slow) var(--c54-ease-out) both;
+  /* Leaving is quicker than arriving: the sheet has already answered the request
+     by the time it starts moving, and a slow exit makes dismissal feel ignored. */
+  --animate-sheet-out-right: sheet-out-right var(--c54-duration-base) var(--c54-ease-in-out) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-spin-slow: spin 0.9s linear infinite;
 }
 
+/*
+ * Printed brand colours for the asset tag (`features/assets/asset-tag`).
+ * Static values on purpose: the tag identifies hardware out in the world, so it
+ * must not follow the runtime theme switch the way screen chrome does. White
+ * stays a literal (the label stock itself), not a token.
+ */
+@theme {
+  --color-c54-blue: #0a3df0;
+  --color-c54-red: #e60000;
+  --color-c54-navy: #101f50;
+  --color-c54-gray: #6b7280;
+  --color-c54-line: #d1d5db;
+}
+
+/*
+ * Motion lives here rather than in `@c54/tokens`: the package ships no motion
+ * tokens, so the app owns the timings. `--transition-duration-*` and `--ease-*`
+ * are the namespaces Tailwind reads for `duration-*` and `ease-*`, which is what
+ * makes `duration-c54-fast` / `ease-c54-out` resolve. The `:root` block below
+ * holds the raw values so the keyframes can reference the same numbers.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --transition-duration-c54-instant: var(--c54-duration-instant);
+  --transition-duration-c54-fast: var(--c54-duration-fast);
+  --transition-duration-c54-base: var(--c54-duration-base);
+  --transition-duration-c54-slow: var(--c54-duration-slow);
+  --ease-c54-out: var(--c54-ease-out);
+  --ease-c54-in-out: var(--c54-ease-in-out);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--c54-font-family-body);
+:root {
+  --c54-duration-instant: 80ms;
+  --c54-duration-fast: 150ms;
+  --c54-duration-base: 220ms;
+  --c54-duration-slow: 320ms;
+  --c54-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --c54-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* The app chrome paints as a single dense block; this is the gutter rhythm. */
+  --c54-header-height: 3.5rem;
+  --c54-sidebar-width: 15rem;
+  --c54-content-max: 96rem;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * A sheet anchored to the right edge starts fully off-canvas to the right and
+ * travels exactly its own width, so it is already flush at rest. `opacity` is not
+ * animated here: fading a panel as it slides makes the text on it visibly soft
+ * for the duration, which reads as a rendering glitch rather than motion.
+ */
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/*
+ * The mirrors of the two entry animations. They are separate keyframes rather
+ * than a reversed one so the easing can differ: entering decelerates into place,
+ * leaving accelerates away. `animationend` is what the dialog waits on before it
+ * actually closes the element, so these have to exist for the exit to complete.
+ */
+@keyframes sheet-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.985);
+  }
+}
+
+@keyframes sheet-out-right {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/*
+ * Masthead restyle: the token package ships a red masthead; the app wants a
+ * quiet gray bar with the logo doing the branding. Overriding the two
+ * `masthead-*` custom properties (rather than restyling every consumer)
+ * keeps the sidebar, login screen and masthead consistent through one seam —
+ * utilities compile to `var(--c54-color-masthead-bg)`, so they all follow.
+ *
+ * The typeface override rides the same seam for the same reason: the package
+ * asks for Geist, the app ships Inter, and pointing the `font.family` tokens at
+ * the `next/font` variables swaps the whole UI without touching a single
+ * component. `--font-inter` / `--font-geist-mono` are defined on <html> by
+ * src/app/layout.tsx.
+ *
+ * Unlayered on purpose: the generated token sheet is unlayered too, and these
+ * equal-specificity selectors only win because they come later in the cascade.
+ *
+ * The font family has to be repeated in the dark block below, unlike the
+ * masthead colours which genuinely differ per mode. The token sheet scopes each
+ * mode to its own attribute pair — `[data-c54-theme="wire-desk"]` for light and
+ * `[data-c54-theme="wire-desk"][data-c54-mode="dark"]` for dark — so in dark mode
+ * the declaration being overridden sits at specificity 0,2,0 and a bare
+ * `[data-c54-theme]` at 0,1,0 loses to it on specificity alone, no matter where
+ * it lands in the file. Matching the pair restores the tie and lets source order
+ * decide.
+ */
+[data-c54-theme] {
+  --c54-color-masthead-bg: #e9ebf0;
+  --c54-color-masthead-fg: #1c2333;
+
+  --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
+  --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
+  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+[data-c54-theme][data-c54-mode="dark"] {
+  --c54-color-masthead-bg: #0d1120;
+  --c54-color-masthead-fg: #e8eaf0;
+
+  --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
+  --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
+  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--c54-color-border-default);
+  }
+
+  html {
+    background-color: var(--c54-color-bg-surface);
+    color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-c54-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--c54-color-bg-surface);
+    color: var(--c54-color-text-primary);
+    font-family: var(--c54-font-family-body);
+    font-size: var(--c54-font-size-sm);
+    font-weight: var(--c54-font-weight-normal);
+    line-height: var(--c54-font-lineHeight-normal);
+    /* Lets Inter pick its own designs per size: the `opsz` axis requested in
+       src/app/layout.tsx is inert without this. */
+    font-optical-sizing: auto;
+    /* Inter has no italic design in the axes we load, and a slanted fallback
+       looks worse than an upright one at body sizes. */
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Long unbroken strings — serial numbers, cuids, pasted emails — break
+       rather than widening a grid column or a card. Set on the root so it is
+       inherited by everything, since a cell can hold any of those. */
+    overflow-wrap: break-word;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--c54-font-family-heading);
+    font-weight: var(--c54-font-weight-heading);
+    letter-spacing: var(--c54-font-letterSpacing-heading);
+    line-height: var(--c54-font-lineHeight-tight);
+    text-wrap: balance;
+  }
+
+  /* Body copy gets the opposite treatment to headings: balance fights a long
+     ragged edge, whereas `pretty` only fixes the last few lines. */
+  p {
+    text-wrap: pretty;
+  }
+
+  /* One focus treatment across the whole app, only for keyboard users. The
+     outline inherits each element's own border-radius, so it needs no shaping
+     of its own — and none is given, because setting one here would silently
+     restyle the element being focused. */
+  :focus-visible {
+    outline: 2px solid var(--c54-color-action-primary);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--c54-color-action-primary);
+    color: var(--c54-color-action-primary-fg);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Native date/number controls inherit the token palette. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--c54-color-text-muted);
+  }
+
+  /* Firefox has no ::-webkit-scrollbar, so the same two-tone treatment is
+     expressed with the standard properties instead of being dropped. */
+  [data-c54-theme] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--c54-color-border-strong) transparent;
+  }
+
+  [data-c54-theme] ::-webkit-scrollbar {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  [data-c54-theme] ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-c54-theme] ::-webkit-scrollbar-thumb {
+    background-color: var(--c54-color-border-strong);
+    border-radius: var(--c54-radius-pill);
+  }
+
+  [data-c54-theme] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--c54-color-text-muted);
+  }
+}
+
+/*
+ * Motion is decorative everywhere it is used (a dialog rising, a drawer sliding,
+ * a skeleton shimmering), so a reader who asked the OS to calm things down should
+ * get the settled state instantly instead. Durations are forced to ~0 rather
+ * than `animation: none` so that anything depending on `animationend` or
+ * `transitionend` still fires and nothing is left waiting on a listener.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* Dense "wire desk" data grid: hairline rules, tabular figures, no zebra. */
+  .c54-data-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .c54-data-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* Rows scroll underneath this, so the fill has to be solid — a translucent
+       one would let the text behind show through. */
+    background-color: var(--c54-color-bg-muted);
+    font-size: var(--c54-font-size-2xs);
+    font-weight: var(--c54-font-weight-semibold);
+    letter-spacing: var(--c54-font-letterSpacing-widest);
+    text-transform: uppercase;
+    color: var(--c54-color-text-secondary);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .c54-data-table td {
+    border-top: 1px solid var(--c54-color-border-default);
+    vertical-align: middle;
+  }
+
+  /* Thead and first cell share a colour, so the inset rule below them would
+     draw a line across the header's own bottom edge. */
+  .c54-data-table thead tr:first-child th:first-child {
+    border-top-left-radius: var(--c54-radius-card);
+  }
+
+  .c54-data-table thead tr:first-child th:last-child {
+    border-top-right-radius: var(--c54-radius-card);
+  }
+}
+
+@media print {
+  /* Paper is declared rather than assumed. Left to itself the browser picks its
+     own default — Letter, in most of the world — which is narrower and taller
+     than A4 and silently slices every sheet in two, turning a 5-sheet run into 10
+     pages of half-blank paper. The margin is zero because each sheet carries its
+     own 10mm padding and padding the box twice would move every label. */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .c54-no-print {
+    display: none !important;
+  }
+
+  /* The single-tag page has no grid of its own, so it inherits the zero page
+     margin above and would otherwise print edge to edge. */
+  .c54-label-single {
+    padding: 10mm;
+  }
+
+  /* The asset tag prints itself: colours forced on (browsers skip backgrounds
+     by default) and kept whole on one page. */
+  .c54-asset-tag {
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Batch label sheets. The tag scales itself from the cell width, so the only
+     job here is the page box and the grid — no per-label sizing anywhere. */
+  .c54-label-preview {
+    display: none;
+  }
+
+  .c54-label-page {
+    display: grid;
+    grid-template-columns: repeat(var(--label-columns), 1fr);
+    gap: var(--label-gap, 4mm);
+    box-sizing: border-box;
+    /* Width is explicit because the grid's column count depends on it; height is
+       not. A sheet declared as exactly 297mm tall overflows the 297mm print box
+       by a sub-pixel, and the browser resolves that by emitting a blank extra
+       page after each one — 10 sheets of paper became 12. The grid's natural
+       height already stops at the bottom margin, so the sheet ends flush without
+       being told to. */
+    inline-size: 210mm;
+    padding: var(--label-margin, 10mm);
+    /* Start-aligned, never stretched. The cells are exactly tag-shaped (see
+       `.c54-label-cell`), so stretching rows would open a dead strip under every
+       label and drag the cut guides off the positions the preview showed. */
+    align-content: start;
+    justify-content: stretch;
+  }
+
+  /* An explicit break per sheet. A grid is not one box, so `break-inside` on a
+     cell alone would let the browser start a new sheet mid-row. */
+  .c54-label-page + .c54-label-page {
+    break-before: page;
+  }
+
+  /* Rows are sized from the tag's own 16:9 frame rather than with a fixed height,
+     which is what makes the grid land exactly on the bottom margin at any column
+     count. The cell needs `min-inline-size: 0` to be allowed to shrink inside the
+     grid track, otherwise the tag's intrinsic width wins and the columns overrun
+     the page. */
+  .c54-label-cell {
+    aspect-ratio: 16 / 9;
+    break-inside: avoid;
+    min-inline-size: 0;
+    display: flex;
+  }
+}
+
+/* On screen the sheet scales to the viewport but keeps A4's proportions, so the
+   preview has the same aspect as the paper it stands in for. */
+@screen {
+  .c54-label-documents {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .c54-label-page {
+    display: grid;
+    grid-template-columns: repeat(var(--label-columns), 1fr);
+    gap: var(--label-gap, 4mm);
+    box-sizing: border-box;
+    background: #fff;
+    padding: var(--label-margin, 10mm);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+    inline-size: 100%;
+    max-inline-size: 210mm;
+    aspect-ratio: 210 / 297;
+  }
+
+  .c54-label-cell {
+    aspect-ratio: 16 / 9;
+    min-inline-size: 0;
+    display: flex;
+  }
 }

@@ -80,13 +80,29 @@ model Asset {
   @@index([status])
 }
 
+model Department {
+  id   String @id @default(cuid())
+  name String @unique
+
+  staff Staff[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Department")
+}
+
 model Staff {
-  id         String  @id @default(cuid())
-  name       String
-  department String
-  email      String  @unique
-  phone      String?
-  role       StaffRole @default(USER)
+  id   String @id @default(cuid())
+  name String
+  // Reference, not a string: departments are maintained in one place
+  // (/departments) and every staff form picks from that list rather than
+  // typing a value, so "IT" and "it " cannot both end up in the register.
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  email        String     @unique
+  phone        String?
+  role         StaffRole  @default(USER)
   // NULL means "no password yet": the account cannot log in.
   passwordHash  String?
   // Bumped on sign-out and password changes to revoke outstanding cookies.
@@ -99,6 +115,7 @@ model Staff {
   updatedAt DateTime @updatedAt
 
   @@index([role])
+  @@index([departmentId])
 }
 
 model Assignment {

@@ -128,6 +128,11 @@
   --text-c54-hero: var(--c54-font-size-hero);
 
   /* Weights */
+  --font-weight-c54-normal: var(--c54-font-weight-normal);
+  --font-weight-c54-medium: var(--c54-font-weight-medium);
+  --font-weight-c54-semibold: var(--c54-font-weight-semibold);
+  --font-weight-c54-bold: var(--c54-font-weight-bold);
+  --font-weight-c54-extrabold: var(--c54-font-weight-extrabold);
   --font-weight-c54-heading: var(--c54-font-weight-heading);
 
   /* Line heights */

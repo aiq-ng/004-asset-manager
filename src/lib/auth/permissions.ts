@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/errors";
  *   asset:manage (CRUD, retire, images)        ADMIN and up
  *   assetType:manage                           ADMIN and up
  *   staff:manage (accounts + roles)            SUPERADMIN only
+ *   department:manage (org structure)          SUPERADMIN only
  *   audit:read (the audit trail)                SUPERADMIN only
  *
  * SUPERADMIN is granted exactly once, by `pnpm auth:create-superadmin`, and is
@@ -27,6 +28,7 @@ export type Permission =
   | "asset:manage"
   | "assetType:manage"
   | "staff:manage"
+  | "department:manage"
   | "audit:read";
 
 const RANK: Record<StaffRole, number> = {
@@ -43,6 +45,10 @@ const MINIMUM_ROLE: Record<Permission, StaffRole> = {
   "asset:manage": "ADMIN",
   "assetType:manage": "ADMIN",
   "staff:manage": "SUPERADMIN",
+  // Departments are org structure rather than day-to-day data, and a department
+  // that vanishes would strand every account pointing at it. Same tier as the
+  // accounts themselves.
+  "department:manage": "SUPERADMIN",
   "audit:read": "SUPERADMIN",
 };
 

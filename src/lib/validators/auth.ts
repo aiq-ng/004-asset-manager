@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 
 const email = z
   .string()

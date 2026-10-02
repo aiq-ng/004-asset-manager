@@ -102,14 +102,15 @@ export async function listStaff(
           OR: [
             { name: { contains: query.q, mode: "insensitive" as const } },
             { email: { contains: query.q, mode: "insensitive" as const } },
-            { department: { contains: query.q, mode: "insensitive" as const } },
+            { department: { name: { contains: query.q, mode: "insensitive" as const } } },
             { phone: { contains: query.q, mode: "insensitive" as const } },
           ],
         }
       : {}),
-    ...(query.department
-      ? { department: { equals: query.department, mode: "insensitive" as const } }
-      : {}),
+    // The filter is a department id, not a name: the picker offers exactly the
+    // departments that exist, so matching on the id is both cheaper and immune to
+    // two departments ever being spelled the same way.
+    ...(query.departmentId ? { departmentId: query.departmentId } : {}),
     ...(query.role ? { role: query.role } : {}),
   };
 
@@ -140,7 +141,7 @@ export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
     const created = await prisma.staff.create({
       data: {
         name: input.name,
-        department: input.department,
+        departmentId: input.departmentId,
         email: input.email,
         phone: input.phone ?? null,
         role: input.role as StaffRole,
@@ -158,7 +159,7 @@ export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
       metadata: {
         email: created.email,
         role: created.role,
-        department: created.department,
+        department: created.department.name,
         // Deliberately records that a password was set, never the password.
         passwordSet: input.password !== undefined,
       },
@@ -173,7 +174,14 @@ export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
 export async function updateStaff(id: string, input: UpdateStaffInput): Promise<StaffDto> {
   const target = await prisma.staff.findUnique({
     where: { id },
-    select: { id: true, role: true, name: true, email: true, phone: true, department: true },
+    select: {
+      id: true,
+      role: true,
+      name: true,
+      email: true,
+      phone: true,
+      department: { select: { id: true, name: true } },
+    },
   });
 
   if (!target) throw ApiError.notFound(`Staff ${id} not found`);
@@ -186,7 +194,7 @@ export async function updateStaff(id: string, input: UpdateStaffInput): Promise<
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.department !== undefined ? { department: input.department } : {}),
+        ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
         ...(input.role !== undefined ? { role: input.role as StaffRole } : {}),
@@ -255,6 +263,7 @@ export async function deleteStaff(id: string): Promise<void> {
   const staff = await prisma.staff.findUnique({
     where: { id },
     include: {
+      department: { select: { name: true } },
       assignments: {
         select: { id: true, dateReturned: true },
       },
@@ -284,7 +293,7 @@ export async function deleteStaff(id: string): Promise<void> {
       metadata: {
         email: staff.email,
         role: staff.role,
-        department: staff.department,
+        department: staff.department.name,
         assignmentCount: staff.assignments.length,
       },
     });

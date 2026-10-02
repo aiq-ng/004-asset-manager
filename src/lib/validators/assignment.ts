@@ -16,6 +16,12 @@ export const createAssignmentSchema = z.object({
 });
 
 export const listAssignmentsQuerySchema = paginationSchema.extend({
+  /**
+   * Free text, matched against the asset and the holder. The search box on the
+   * register posts `q`, so the key has to exist here or the term is silently
+   * dropped and the input looks broken.
+   */
+  q: z.string().trim().min(1).max(120).optional(),
   assetId: z.string().trim().min(1).max(64).optional(),
   staffId: z.string().trim().min(1).max(64).optional(),
   /** "true" returns only assignments with dateReturned = null. */

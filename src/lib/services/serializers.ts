@@ -3,7 +3,7 @@ import type { Prisma, StaffRole } from "@/generated/prisma/client";
 export const staffSelect = {
   id: true,
   name: true,
-  department: true,
+  department: { select: { id: true, name: true } },
   email: true,
   phone: true,
   role: true,
@@ -54,7 +54,17 @@ type AssignmentRow = {
 export interface StaffDto {
   id: string;
   name: string;
+  /**
+   * The department's name, flattened out of the relation.
+   *
+   * The DTO keeps presenting a plain string on purpose: it is the app's own
+   * contract, and every read site — tables, the masthead, the dashboard badge —
+   * wants to print a name, not traverse a relation. The flattening happens here,
+   * once, instead of at two dozen call sites.
+   */
   department: string;
+  /** Needed by the staff forms to preselect the current value. */
+  departmentId: string;
   email: string;
   phone: string | null;
   role: StaffRole;
@@ -92,7 +102,8 @@ export function toStaffDto(staff: StaffRecord): StaffDto {
   return {
     id: staff.id,
     name: staff.name,
-    department: staff.department,
+    department: staff.department.name,
+    departmentId: staff.department.id,
     email: staff.email,
     phone: staff.phone,
     role: staff.role,

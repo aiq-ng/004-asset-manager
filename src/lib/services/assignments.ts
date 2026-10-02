@@ -205,6 +205,18 @@ export async function listAssignments(
   query: ListAssignmentsQuery,
 ): Promise<{ items: AssignmentDto[]; total: number; page: number; pageSize: number }> {
   const where = {
+    // `q` spans the joined asset and staff rows, so a search finds either the
+    // asset id or the person holding it.
+    ...(query.q
+      ? {
+          OR: [
+            { asset: { assetId: { contains: query.q, mode: "insensitive" as const } } },
+            { asset: { description: { contains: query.q, mode: "insensitive" as const } } },
+            { staff: { name: { contains: query.q, mode: "insensitive" as const } } },
+            { staff: { email: { contains: query.q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
     ...(query.assetId
       ? { asset: toAssetWhere(query.assetId) }
       : {}),

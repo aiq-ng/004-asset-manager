@@ -30,10 +30,16 @@ function toAssetWhere(idOrAssetId: string): { id: string } | { assetId: string }
   return idOrAssetId.startsWith("IT-") ? { assetId: idOrAssetId } : { id: idOrAssetId };
 }
 
-export async function listAssets(
-  query: ListAssetsQuery,
-): Promise<{ items: AssetDto[]; total: number; page: number; pageSize: number }> {
-  const where = {
+/**
+ * Translates a list query into a Prisma filter.
+ *
+ * Extracted so that "select all" on the register and the list itself can never
+ * disagree about what the filter means — the one place that matters is a bulk
+ * action: if these two ever drifted, selecting everything would quietly act on
+ * a different set than the one on screen.
+ */
+function buildAssetWhere(query: ListAssetsQuery) {
+  return {
     ...(query.q
       ? {
           OR: [
@@ -59,6 +65,12 @@ export async function listAssets(
         }
       : {}),
   };
+}
+
+export async function listAssets(
+  query: ListAssetsQuery,
+): Promise<{ items: AssetDto[]; total: number; page: number; pageSize: number }> {
+  const where = buildAssetWhere(query);
 
   const [rows, total] = await Promise.all([
     prisma.asset.findMany({
@@ -307,4 +319,112 @@ export async function removeAssetImage(idOrAssetId: string): Promise<AssetDto> {
   });
 
   return toAssetDto(updated, null);
+}
+
+export interface AssetLabelDto {
+  assetId: string;
+  device: string;
+  /**
+   * Position among the assets of this same type, counted in asset-id order.
+   * This is deliberately *not* `Asset.unit`: that column is a quantity ("six of
+   * these"), which on its own would print `006 of 250` for an asset that has
+   * nothing to do with being the six hundredth thing on the shelf.
+   */
+  position: number;
+  /** Assets of this type on the register — the denominator in `01 of 20`. */
+  positionTotal: number;
+  serialNumber: string | null;
+}
+
+/**
+ * Resolves a selection of asset numbers for printing.
+ *
+ * Two things are deliberate here. The select list is narrow — a label needs the
+ * number, the device name, the unit and the serial, so history, assignments and
+ * signed image URLs are all left unqueried; that keeps a 100-label run to one
+ * small query instead of 100 detail reads. And the result comes back in the order
+ * the caller asked for, because a label sheet is sorted by asset number
+ * wherever the labels came from, and re-sorting would scramble a run mid-print.
+ *
+ * Unknown numbers are dropped rather than thrown: a selection can go stale if an
+ * asset is retired between the list page rendering and the sheet opening, and one
+ * vanished asset should not cost the operator the other ninety-nine labels.
+ */
+export async function listAssetsForLabels(
+  assetIds: string[],
+): Promise<AssetLabelDto[]> {
+  if (assetIds.length === 0) return [];
+
+  const rows = await prisma.asset.findMany({
+    where: { assetId: { in: assetIds } },
+    select: {
+      assetId: true,
+      serialNumber: true,
+      assetTypeId: true,
+      assetType: { select: { name: true } },
+    },
+  });
+
+  // Positions come from the register's own ordering rather than from any column
+  // on the asset, so the numbers are right without anyone having to maintain
+  // them. One ordered read per type covers both the totals and the ranks, which
+  // keeps a hundred labels at two queries instead of a hundred.
+  const typeIds = [...new Set(rows.map((row) => row.assetTypeId))];
+  const fleet =
+    typeIds.length === 0
+      ? []
+      : await prisma.asset.findMany({
+          where: { assetTypeId: { in: typeIds } },
+          select: { assetId: true, assetTypeId: true },
+          orderBy: { assetId: "asc" },
+        });
+
+  const totals = new Map<string, number>();
+  for (const row of fleet) {
+    totals.set(row.assetTypeId, (totals.get(row.assetTypeId) ?? 0) + 1);
+  }
+
+  const seen = new Map<string, number>();
+  const rank = new Map<string, { position: number; total: number }>();
+  for (const row of fleet) {
+    const position = (seen.get(row.assetTypeId) ?? 0) + 1;
+    seen.set(row.assetTypeId, position);
+    rank.set(row.assetId, { position, total: totals.get(row.assetTypeId) ?? 1 });
+  }
+
+  const byNumber = new Map(rows.map((row) => [row.assetId, row]));
+
+  return assetIds.flatMap((assetId) => {
+    const row = byNumber.get(assetId);
+    if (!row) return [];
+
+    return [
+      {
+        assetId: row.assetId,
+        device: row.assetType.name,
+        position: rank.get(row.assetId)?.position ?? 1,
+        positionTotal: rank.get(row.assetId)?.total ?? 1,
+        serialNumber: row.serialNumber,
+      },
+    ];
+  });
+}
+
+/**
+ * Every asset number matching a filter, ignoring pagination.
+ *
+ * Exists for bulk actions, where "select all" has to mean all of the filtered
+ * set rather than the twenty rows currently on screen — with a hundred laptops
+ * on the register, a page-scoped select-all would still mean ticking through five
+ * pages by hand, which is the thing the bulk label sheet is meant to remove.
+ *
+ * Asset numbers only, never full rows: the caller needs identifiers to carry into
+ * a label run, and a thousand identifiers is a payload a thousand documents are
+ * not.
+ */
+export async function listMatchingAssetIds(query: ListAssetsQuery): Promise<string[]> {
+  const where = buildAssetWhere(query);
+  const rows = await prisma.asset.findMany({ where, select: { assetId: true } });
+
+  return rows.map((row) => row.assetId);
 }
