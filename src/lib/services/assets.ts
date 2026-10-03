@@ -192,12 +192,13 @@ export async function createAssetsInBulk(input: BulkAssetSubmitInput): Promise<B
               data: {
                 assetId,
                 assetTypeId: assetType.id,
-                description: input.description,
+                description: input.brand ? `${input.name} (${input.brand})` : input.name,
+                brand: input.brand ?? null,
                 // One physical item per row: the quantity in this flow is the
                 // number of rows being entered, not a per-row count.
                 unit: 1,
                 serialNumber,
-                status: "AVAILABLE",
+                status: input.status ?? "AVAILABLE",
               },
               select: { assetId: true },
             });
@@ -223,7 +224,8 @@ export async function createAssetsInBulk(input: BulkAssetSubmitInput): Promise<B
     }`,
     metadata: {
       assetType: assetType.code,
-      description: input.description,
+      description: input.brand ? `${input.name} (${input.brand})` : input.name,
+      brand: input.brand ?? null,
       count: created.length,
       assets: created,
       skipped,
@@ -255,7 +257,8 @@ export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {
         data: {
           assetId,
           assetTypeId: assetType.id,
-          description: input.description,
+          description: input.brand ? `${input.name} (${input.brand})` : input.name,
+          brand: input.brand ?? null,
           unit: input.unit,
           // "" is normalised to null by the validator so serial-less bulk items
           // do not collide on the unique constraint.
@@ -275,6 +278,7 @@ export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {
         assetId: created.assetId,
         assetType: assetType.code,
         description: created.description,
+        brand: created.brand,
         unit: created.unit,
         serialNumber: created.serialNumber,
         status: created.status,
@@ -302,10 +306,20 @@ export async function updateAsset(
 
   let updated: AssetRecord;
   try {
+    const description =
+      input.name !== undefined || input.brand !== undefined
+        ? (() => {
+            const name = input.name ?? existing.description.replace(/\s*\([^)]*\)$/, "");
+            const brand = input.brand !== undefined ? input.brand : existing.brand;
+            return brand ? `${name} (${brand})` : name;
+          })()
+        : undefined;
+
     updated = await prisma.asset.update({
       where: { id: existing.id },
       data: {
-        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(input.brand !== undefined ? { brand: input.brand } : {}),
         ...(input.unit !== undefined ? { unit: input.unit } : {}),
         ...(input.serialNumber !== undefined ? { serialNumber: input.serialNumber } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),

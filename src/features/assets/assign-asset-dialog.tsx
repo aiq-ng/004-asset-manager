@@ -5,7 +5,8 @@ import { useActionState, useMemo, useState } from "react";
 import { assignAssetAction } from "@/features/assets/actions";
 import { Dialog, DialogCancelButton, DialogCloseOnSuccess } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Input, Textarea } from "@/components/ui/controls";
+import { Combobox } from "@/components/ui/combobox";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
@@ -42,21 +43,6 @@ export function AssignAssetDialog({
   staff: StaffListOption[];
 }) {
   const [state, formAction] = useActionState(assignAssetAction, INITIAL_ACTION_STATE);
-  const [search, setSearch] = useState("");
-
-  const candidates = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const matching = needle
-      ? staff.filter(
-          (person) =>
-            person.name.toLowerCase().includes(needle) ||
-            person.email.toLowerCase().includes(needle) ||
-            person.department.toLowerCase().includes(needle),
-        )
-      : staff;
-
-    return matching.slice(0, 100);
-  }, [staff, search]);
 
   return (
     <Dialog
@@ -80,39 +66,27 @@ export function AssignAssetDialog({
 
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
-        <Field label="Filter list" htmlFor="assign-filter">
-          {(field) => (
-            <Input
-              {...field}
-              id={field.id}
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, email or department"
-            />
-          )}
-        </Field>
-
         <Field
           label="Staff member"
           htmlFor="assign-staff"
           error={state.fieldErrors?.staffId}
-          hint={
-            candidates.length === 0
-              ? "Nobody matches that filter. Only staff you are allowed to assign to are listed."
-              : `${candidates.length} available`
-          }
+          hint="Only staff you are allowed to assign to are listed."
           required
         >
           {(field) => (
-            <Select {...field} id={field.id} name="staffId" invalid={field.invalid} defaultValue="">
-              <option value="">Choose someone…</option>
-              {candidates.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} — {person.department}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              {...field}
+              id={field.id}
+              name="staffId"
+              invalid={field.invalid}
+              placeholder="Choose someone…"
+              searchPlaceholder="Name, email or department"
+              emptyMessage="Nobody matches that filter."
+              options={staff.map((person) => ({
+                value: person.id,
+                label: `${person.name} — ${person.department}`,
+              }))}
+            />
           )}
         </Field>
 

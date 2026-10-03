@@ -35,6 +35,7 @@ export function AssignmentPanel({
     dateAssigned: string;
     note: string | null;
     staff: { id: string; name: string; department: string; email: string };
+    assignedBy: { id: string; name: string; department: string } | null;
   } | null;
   canReturn: boolean;
   /** Shown on an unassigned asset so the detail page can complete a hand-over. */
@@ -89,6 +90,13 @@ export function AssignmentPanel({
             <span className="font-c54-medium">{assignment.staff.name}</span>
             <span className="block text-c54-2xs text-c54-text-muted">{assignment.staff.department}</span>
           </DetailRow>
+          <DetailRow term="Assigned by">
+            {assignment.assignedBy ? (
+              assignment.assignedBy.name
+            ) : (
+              <span className="text-c54-text-muted">—</span>
+            )}
+          </DetailRow>
           <DetailRow term="Assigned">{formatDay(assignment.dateAssigned)}</DetailRow>
           {assignment.note ? (
             <DetailRow term="Note" className="sm:col-span-2">
@@ -135,6 +143,7 @@ export function AssignmentHistory({
     dateReturned: string | null;
     note: string | null;
     staff: { name: string; department: string };
+    assignedBy: { name: string } | null;
   }[];
 }) {
   if (history.length === 0) {
@@ -165,6 +174,7 @@ export function AssignmentHistory({
             <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
               {formatDay(entry.dateAssigned)}
               {entry.dateReturned ? ` → ${formatDay(entry.dateReturned)}` : " → present"}
+              {entry.assignedBy ? ` · by ${entry.assignedBy.name}` : ""}
             </p>
             {entry.note ? (
               <p className="mt-c54-2 text-c54-xs text-c54-text-secondary">{entry.note}</p>

@@ -1,0 +1,1 @@
+UPDATE "Staff" SET "passwordHash" = 'scrypt$64$yD8qlCPCBT629_nS0gjN2g$SmuGKCeLwLcQ5GAs24mZHaGBXmH88JlAQINzjk3YSRBw1Zs70rdehal3X7m-t3a0Dxpef89OJerPlKOAScg6og' WHERE email = 'ana.ribeiro@example.com';

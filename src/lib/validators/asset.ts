@@ -24,11 +24,13 @@ export const listAssetsQuerySchema = paginationSchema.extend({
 export const createAssetSchema = z.object({
   /** Asset type code (LAP) or id. */
   assetType: z.string().trim().min(1, "assetType is required").max(64),
-  description: z
+  name: z
     .string()
     .trim()
-    .min(1, "description is required")
-    .max(500, "description must be <= 500 characters"),
+    .min(1, "name is required")
+    .max(500, "name must be <= 500 characters"),
+  /** Optional; "" and whitespace are stored as NULL. */
+  brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
   unit: z.coerce
     .number()
     .int("unit must be an integer")
@@ -55,7 +57,9 @@ export const bulkAssetEntrySchema = z
   .object({
     /** Asset type code (LAP) or id. Shared by every row in the batch. */
     assetType: z.string().trim().min(1, "assetType is required").max(64),
-    description: z.string().trim().min(1, "description is required").max(500, "description must be <= 500 characters"),
+    name: z.string().trim().min(1, "name is required").max(500, "name must be <= 500 characters"),
+    /** Optional; "" and whitespace are stored as NULL. */
+    brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
     /** Optional; "" and whitespace are stored as NULL. */
     serialNumber: optionalTrimmedString.optional(),
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
@@ -78,35 +82,39 @@ export const bulkAssetSubmitSchema = z
   .object({
     /** Asset type code (LAP) or id. Shared by every row in the batch. */
     assetType: z.string().trim().min(1, "assetType is required").max(64),
-    description: z
+    name: z
       .string()
       .trim()
-      .min(1, "description is required")
-      .max(500, "description must be <= 500 characters"),
+      .min(1, "name is required")
+      .max(500, "name must be <= 500 characters"),
+    /** Optional; "" and whitespace are stored as NULL. */
+    brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
     /** In the order they should be created, so asset ids run down the column. */
     serials: z
       .array(z.string().trim().max(120, "serial must be <= 120 characters"))
-      .max(BULK_ASSET_ENTRY_MAX * 2, "too many rows submitted")
+      .max(BULK_ASSET_ENTRY_MAX, "too many rows submitted")
       .transform((values) => values.filter((value) => value.length > 0))
       .refine((values) => values.length > 0, "Enter at least one serial number"),
+    status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
   })
   .strict();
 
 export const updateAssetSchema = z
   .object({
-    description: z
+    name: z
       .string()
       .trim()
-      .min(1, "description is required")
-      .max(500, "description must be <= 500 characters")
+      .min(1, "name is required")
+      .max(500, "name must be <= 500 characters")
       .optional(),
+    brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
     unit: z.coerce.number().int("unit must be an integer").min(1, "unit must be >= 1").optional(),
     serialNumber: optionalTrimmedString.optional(),
     /** ASSIGMED is reserved: status flips through the assignments endpoints. */
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: "Provide at least one of: description, unit, serialNumber, status",
+    message: "Provide at least one of: name, brand, unit, serialNumber, status",
   });
 
 /**

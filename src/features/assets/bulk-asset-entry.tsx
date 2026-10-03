@@ -26,7 +26,8 @@ export interface AssetTypeOption {
 /** What is agreed once, up front, and then applies to every row of the batch. */
 interface Batch {
   assetType: string;
-  description: string;
+  name: string;
+  brand: string;
   quantity: number;
 }
 
@@ -217,13 +218,14 @@ function BulkAssetEntryDialog({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const assetType = String(form.get("assetType") ?? "").trim();
-    const description = String(form.get("description") ?? "").trim();
+    const name = String(form.get("name") ?? "").trim();
+    const brand = String(form.get("brand") ?? "").trim();
     const rawQuantity = String(form.get("quantity") ?? "").trim();
     const quantity = Number(rawQuantity);
 
     const errors: Record<string, string> = {};
     if (!assetType) errors.assetType = "Choose an asset type.";
-    if (!description) errors.description = "Add a description.";
+    if (!name) errors.name = "Add a name.";
     if (!rawQuantity || !Number.isInteger(quantity) || quantity < 1) {
       errors.quantity = "Enter how many items you are entering.";
     } else if (quantity > BULK_ASSET_ENTRY_MAX) {
@@ -237,7 +239,7 @@ function BulkAssetEntryDialog({
     setConsumedBatch(null);
     setRestored(false);
     setDraft({
-      batch: { assetType, description, quantity },
+      batch: { assetType, name, brand, quantity },
       serials: Array.from({ length: quantity }, () => ""),
       saved: {},
     });
@@ -348,19 +350,34 @@ function BulkAssetEntryDialog({
           </Field>
 
           <Field
-            label="Description"
-            htmlFor="bulk-asset-description"
-            error={setupErrors.description}
+            label="Name"
+            htmlFor="bulk-asset-name"
+            error={setupErrors.name}
             hint="What a person would recognise this as."
             required
           >
             {(field) => (
-              <Textarea
+              <Input
                 {...field}
                 id={field.id}
-                name="description"
+                name="name"
                 placeholder="24-inch editing monitor"
-                rows={2}
+              />
+            )}
+          </Field>
+
+          <Field
+            label="Brand"
+            htmlFor="bulk-asset-brand"
+            error={setupErrors.brand}
+            hint={'Optional. Composes the name as "Name (Brand)".'}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                id={field.id}
+                name="brand"
+                placeholder="Dell, LG, Samsung…"
               />
             )}
           </Field>
@@ -405,7 +422,9 @@ function BulkAssetEntryDialog({
                 {registeredCount} of {total} registered
               </p>
             </div>
-            <p className="mt-c54-1 text-c54-sm text-c54-text-primary">{batch.description}</p>
+            <p className="mt-c54-1 text-c54-sm text-c54-text-primary">
+              {batch.brand ? `${batch.name} (${batch.brand})` : batch.name}
+            </p>
             <div
               className="mt-c54-3 h-1 w-full overflow-hidden rounded-full bg-c54-bg-muted"
               role="progressbar"
@@ -457,7 +476,8 @@ function BulkAssetEntryDialog({
             className="flex flex-col gap-c54-3"
           >
             <input type="hidden" name="assetType" value={batch.assetType} />
-            <input type="hidden" name="description" value={batch.description} />
+            <input type="hidden" name="name" value={batch.name} />
+            <input type="hidden" name="brand" value={batch.brand} />
             {submitMode ? (
               unsavedSerials.map((serial, index) => (
                 <input key={index} type="hidden" name="serials" value={serial} />

@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { AUDIT_ACTIONS, diffFields } from "@/lib/audit/events";
 import { recordAudit } from "@/lib/audit/context";
 import { ApiError, fromPrismaError } from "@/lib/errors";
-import { hashPassword } from "@/lib/auth/password";
+import { generateTemporaryPassword, hashPassword } from "@/lib/auth/password";
+import { sendInviteEmail } from "@/lib/email/resend";
 import { staffSelect, toStaffDto, type StaffDto } from "@/lib/services/serializers";
 import type { CreateStaffInput, ListStaffQuery, UpdateStaffInput } from "@/lib/validators/staff";
+import type { Actor } from "@/lib/auth/permissions";
 
 export interface CurrentAssetDto {
   id: string;
@@ -137,6 +139,10 @@ export async function getStaff(id: string): Promise<StaffDetailDto> {
 }
 
 export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
+  // No explicit password means an invite: the account gets a generated temporary
+  // password that is shown once, in the email — never in the API response.
+  const temporaryPassword = input.password ? null : generateTemporaryPassword();
+
   try {
     const created = await prisma.staff.create({
       data: {
@@ -145,8 +151,14 @@ export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
         email: input.email,
         phone: input.phone ?? null,
         role: input.role as StaffRole,
-        // No password means a locked account: it exists but cannot sign in.
-        passwordHash: input.password ? await hashPassword(input.password) : null,
+        passwordHash:
+          input.password !== undefined
+            ? await hashPassword(input.password)
+            : await hashPassword(temporaryPassword!),
+        invitedAt: temporaryPassword ? new Date() : null,
+        // The invitee signs in with a password only they cannot know is safe —
+        // it went through email — so they must replace it before doing anything.
+        mustChangePassword: temporaryPassword !== null,
       },
       select: staffSelect,
     });
@@ -162,12 +174,98 @@ export async function createStaff(input: CreateStaffInput): Promise<StaffDto> {
         department: created.department.name,
         // Deliberately records that a password was set, never the password.
         passwordSet: input.password !== undefined,
+        invitedByEmail: temporaryPassword !== null,
       },
     });
+
+    if (temporaryPassword) {
+      const result = await sendInviteEmail({
+        to: created.email,
+        name: created.name,
+        temporaryPassword,
+      });
+
+      await recordAudit({
+        action: AUDIT_ACTIONS.STAFF_INVITED,
+        entityType: "STAFF",
+        entityId: created.id,
+        summary: result.delivered
+          ? `Sent invite email to ${created.email}`
+          : result.skipped
+            ? `Invite email to ${created.email} skipped (no mail key configured)`
+            : `Invite email to ${created.email} failed: ${result.error}`,
+        metadata: {
+          email: created.email,
+          delivered: result.delivered,
+          skipped: result.skipped,
+        },
+      });
+    }
 
     return toStaffDto(created);
   } catch (error) {
     throw fromPrismaError(error, "create staff");
+  }
+}
+
+/**
+ * Re-issues an invite: a new temporary password is generated (invalidating the
+ * old one and any sessions), then emailed. The recovery path when the first
+ * invite never arrived, or the recipient lost it before signing in.
+ */
+export async function resendStaffInvite(id: string, actor: Actor): Promise<{ delivered: boolean; skipped: boolean }> {
+  const target = await prisma.staff.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  if (!target) throw ApiError.notFound(`Staff ${id} not found`);
+  if (target.role === "SUPERADMIN") {
+    throw ApiError.forbidden("The superadmin account cannot be modified");
+  }
+
+  const temporaryPassword = generateTemporaryPassword();
+
+  try {
+    await prisma.staff.update({
+      where: { id: target.id },
+      data: {
+        passwordHash: await hashPassword(temporaryPassword),
+        invitedAt: new Date(),
+        // A fresh temporary password re-arms the forced change on next sign-in.
+        mustChangePassword: true,
+        // The old password is dead; any cookie that was signed in with it goes too.
+        sessionVersion: { increment: 1 },
+      },
+    });
+
+    const result = await sendInviteEmail({
+      to: target.email,
+      name: target.name,
+      temporaryPassword,
+    });
+
+    await recordAudit({
+      action: AUDIT_ACTIONS.STAFF_INVITED,
+      entityType: "STAFF",
+      entityId: target.id,
+      summary: result.delivered
+        ? `${actor.email} re-sent the invite email to ${target.email}`
+        : result.skipped
+          ? `Invite email to ${target.email} skipped (no mail key configured)`
+          : `Invite email to ${target.email} failed: ${result.error}`,
+      metadata: {
+        email: target.email,
+        delivered: result.delivered,
+        skipped: result.skipped,
+        resent: true,
+        sessionsRevoked: true,
+      },
+    });
+
+    return { delivered: result.delivered, skipped: result.skipped };
+  } catch (error) {
+    throw fromPrismaError(error, "resend staff invite");
   }
 }
 
@@ -201,6 +299,8 @@ export async function updateStaff(id: string, input: UpdateStaffInput): Promise<
         ...(input.password !== undefined
           ? {
               passwordHash: await hashPassword(input.password),
+              // An admin-set password is a real password, not a temporary one.
+              mustChangePassword: false,
               // A reset invalidates the cookies that account already holds.
               sessionVersion: { increment: 1 },
             }

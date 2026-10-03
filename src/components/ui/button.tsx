@@ -6,7 +6,7 @@ export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-sm";
 const BASE =
   "relative inline-flex shrink-0 items-center justify-center gap-c54-2 rounded-c54-button font-c54-medium whitespace-nowrap " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-c54-fast ease-c54-out select-none " +
-  "disabled:pointer-events-none disabled:opacity-45 active:not-disabled:translate-y-px";
+  "disabled:pointer-events-none disabled:opacity-45 active:not-disabled:translate-y-px cursor-pointer";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   // The inset highlight stands in for a light source above the control, which is

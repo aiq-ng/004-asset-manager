@@ -26,6 +26,7 @@ export interface AssetListItem {
   id: string;
   assetId: string;
   description: string;
+  brand: string | null;
   status: string;
   serialNumber: string | null;
   unit: number;
@@ -62,6 +63,7 @@ export function AssetTable({
               <TableHeader className="w-44">Asset ID</TableHeader>
               <TableHeader>Description</TableHeader>
               <TableHeader className="w-32">Type</TableHeader>
+              <TableHeader className="w-36">Serial No.</TableHeader>
               <TableHeader className="w-36">Status</TableHeader>
               <TableHeader className="w-48">Assigned to</TableHeader>
               <TableHeader className="w-32">Added</TableHeader>
@@ -81,14 +83,12 @@ export function AssetTable({
                     <CodeChip>{asset.assetId}</CodeChip>
                   </Link>
                 </TableCell>
-                <TableCell className="max-w-80">
-                  <Link href={`/assets/${asset.assetId}`} className="block truncate font-c54-medium">
-                    {asset.description}
-                  </Link>
-                  {asset.serialNumber ? (
-                    <span className="text-c54-2xs text-c54-text-muted">S/N {asset.serialNumber}</span>
-                  ) : null}
-                </TableCell>
+<TableCell className="max-w-80">
+                <Link href={`/assets/${asset.assetId}`} className="block truncate font-c54-medium">
+                  {asset.description}
+                </Link>
+              </TableCell>
+              <TableCell>{asset.serialNumber ?? '—'}</TableCell>
                 <TableCell className="text-c54-xs text-c54-text-secondary">{asset.assetType.name}</TableCell>
                 <TableCell>
                   <StatusBadge status={asset.status} />

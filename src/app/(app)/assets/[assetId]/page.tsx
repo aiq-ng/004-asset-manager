@@ -120,6 +120,9 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
                     {asset.assetType.name}{" "}
                     <span className="text-c54-text-muted">({asset.assetType.code})</span>
                   </DetailRow>
+                  <DetailRow term="Brand">
+                    {asset.brand ?? <span className="text-c54-text-muted">—</span>}
+                  </DetailRow>
                   <DetailRow term="Serial number">
                     {asset.serialNumber ?? <span className="text-c54-text-muted">—</span>}
                   </DetailRow>

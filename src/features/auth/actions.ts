@@ -3,11 +3,25 @@
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 
+import { z } from "zod";
+
 import { getActor } from "@/lib/auth/actor";
 import { clientIpFrom, runWithRequestContext } from "@/lib/audit/context";
 import { ApiError } from "@/lib/errors";
-import { login as loginWithPassword, logout as logoutService } from "@/lib/services/auth";
-import { loginSchema } from "@/lib/validators/auth";
+import { defineAction } from "@/lib/server/define-action";
+import {
+  changePassword as changePasswordService,
+  login as loginWithPassword,
+  logout as logoutService,
+  requestPasswordReset,
+  resetPassword,
+} from "@/lib/services/auth";
+import {
+  changePasswordSchema,
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+} from "@/lib/validators/auth";
 import { formDataToObject, toFieldErrors, type ActionState } from "@/lib/server/action-state";
 
 /**
@@ -63,6 +77,99 @@ function safeNextPath(candidate: FormDataEntryValue | null): string {
   if (typeof candidate !== "string") return "/";
   if (!candidate.startsWith("/") || candidate.startsWith("//")) return "/";
   return candidate;
+}
+
+/**
+ * "Forgot password" — always succeeds with the same wording, whether or not the
+ * address is registered. Revealing nothing is the point; the service does the
+ * silent skip, this action just never contradicts it.
+ */
+export async function forgotPasswordAction(
+  _previousState: ActionState<undefined>,
+  formData: FormData,
+): Promise<ActionState<undefined>> {
+  const parsed = forgotPasswordSchema.safeParse(formDataToObject(formData));
+
+  if (!parsed.success) {
+    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error) };
+  }
+
+  try {
+    await runWithRequestContext(await auditContext("action:forgot-password", null), () =>
+      requestPasswordReset(parsed.data.email),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof ApiError) {
+      return { ok: false, error: error.message, code: error.code };
+    }
+
+    console.error("[action] forgot password failed", error);
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+
+  return {
+    ok: true,
+    error: "",
+    message: "If an account exists for that email, a reset link is on its way. Check your inbox.",
+  };
+}
+
+/**
+ * The forced password change for invited accounts.
+ *
+ * Same schema as the settings action (with confirmation), but on success it
+ * navigates to the app root instead of back to settings: the session that just
+ * cleared its `mustChangePassword` flag wants to land somewhere useful, not on
+ * the form it was bounced from. `changePassword` re-issues the session cookie.
+ */
+const forceChangePasswordSchema = changePasswordSchema
+  .extend({
+    confirmPassword: z.string().min(1, "confirm your new password").max(200),
+  })
+  .refine((value) => value.confirmPassword === value.newPassword, {
+    path: ["confirmPassword"],
+    message: "The two passwords do not match",
+  });
+
+export const forceChangePasswordAction = defineAction(
+  forceChangePasswordSchema,
+  (input, actor) => changePasswordService(actor.id, input.currentPassword ?? "", input.newPassword),
+  {
+    route: "action:forceChangePassword",
+    successMessage: "Password updated.",
+    redirect: () => "/",
+  },
+);
+
+/** Consumes the token from the email link and sets the new password. */
+export async function resetPasswordAction(
+  _previousState: ActionState<undefined>,
+  formData: FormData,
+): Promise<ActionState<undefined>> {
+  const parsed = resetPasswordSchema.safeParse(formDataToObject(formData));
+
+  if (!parsed.success) {
+    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error) };
+  }
+
+  try {
+    await runWithRequestContext(await auditContext("action:reset-password", null), () =>
+      resetPassword(parsed.data.token, parsed.data.newPassword),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof ApiError) {
+      return { ok: false, error: error.message, code: error.code };
+    }
+
+    console.error("[action] reset password failed", error);
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+
+  return { ok: true, error: "", message: "Your password has been updated. Sign in with the new one." };
 }
 
 export async function logoutAction(): Promise<void> {

@@ -13,3 +13,6 @@ export const IMAGE_ALLOWED_EXTENSIONS = {
   "image/png": "png",
   "image/webp": "webp",
 } as const;
+
+/** How long a forgot-password link stays valid. Short, because it is single-use. */
+export const PASSWORD_RESET_TTL_MINUTES = 60;

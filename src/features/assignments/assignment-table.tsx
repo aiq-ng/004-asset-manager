@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { Badge, CodeChip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
@@ -18,6 +17,8 @@ export interface AssignmentListItem {
   dateReturned: string | null;
   note: string | null;
   staff: { id: string; name: string; department: string };
+  /** Who handed the asset over; null for rows written before this was recorded. */
+  assignedBy: { id: string; name: string } | null;
 }
 
 /**
@@ -41,6 +42,8 @@ export function AssignmentTable({
             <TableRow>
               <TableHeader>Asset</TableHeader>
               <TableHeader>Holder</TableHeader>
+              <TableHeader className="w-36">Assigned by</TableHeader>
+              <TableHeader className="w-40">Department</TableHeader>
               <TableHeader className="w-36">Status</TableHeader>
               <TableHeader className="w-36">Assigned</TableHeader>
               <TableHeader className="w-36">Returned</TableHeader>
@@ -66,16 +69,11 @@ export function AssignmentTable({
         {assignments.map((assignment) => (
           <li key={assignment.id} className="flex items-start gap-c54-3 px-c54-pad-lg py-c54-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-c54-2">
-                <CodeChip>{assignment.assetId}</CodeChip>
-                <Badge tone={assignment.dateReturned ? "neutral" : "success"} size="sm">
-                  {assignment.dateReturned ? "Returned" : "Out"}
-                </Badge>
-              </div>
-              <p className="mt-c54-2 text-c54-sm font-c54-medium">{assignment.asset.description}</p>
+              <p className="text-c54-sm font-c54-medium">{assignment.asset.description}</p>
               <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
                 {assignment.staff.name} · {assignment.staff.department} · from{" "}
                 {formatDate(assignment.dateAssigned)}
+                {assignment.assignedBy ? ` · by ${assignment.assignedBy.name}` : ""}
               </p>
               {assignment.note ? (
                 <p className="mt-c54-2 text-c54-xs text-c54-text-secondary">{assignment.note}</p>
@@ -104,7 +102,6 @@ function AssignmentRow({
     <TableRow>
       <TableCell>
         <Link href={`/assets/${assignment.assetId}`} className="block">
-          <CodeChip>{assignment.assetId}</CodeChip>
           <span className="mt-c54-1 block max-w-64 truncate text-c54-xs text-c54-text-secondary">
             {assignment.asset.description}
           </span>
@@ -114,7 +111,18 @@ function AssignmentRow({
         <Link href={`/staff/${assignment.staff.id}`} className="text-c54-sm hover:underline">
           {assignment.staff.name}
         </Link>
-        <span className="block text-c54-2xs text-c54-text-muted">{assignment.staff.department}</span>
+      </TableCell>
+      <TableCell className="text-c54-sm text-c54-text-secondary">
+        {assignment.assignedBy ? (
+          <Link href={`/staff/${assignment.assignedBy.id}`} className="hover:underline">
+            {assignment.assignedBy.name}
+          </Link>
+        ) : (
+          <span className="text-c54-text-muted">—</span>
+        )}
+      </TableCell>
+      <TableCell className="text-c54-xs text-c54-text-secondary">
+        {assignment.staff.department}
       </TableCell>
       <TableCell>
         <StatusBadge status={assignment.asset.status} />

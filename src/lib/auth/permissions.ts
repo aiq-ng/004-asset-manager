@@ -58,6 +58,12 @@ export interface Actor {
   email: string;
   department: string;
   role: StaffRole;
+  /**
+   * True while signed in with a temporary password from an invite. Page guards
+   * and API wrappers bounce the session to the password-change screen before
+   * anything else in the app runs.
+   */
+  mustChangePassword: boolean;
 }
 
 export function isStaffRole(value: unknown): value is StaffRole {

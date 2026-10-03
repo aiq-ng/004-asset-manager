@@ -23,6 +23,7 @@ export function AssetEditForm({
   asset: {
     assetId: string;
     description: string;
+    brand: string | null;
     unit: number;
     serialNumber: string | null;
     status: string;
@@ -44,13 +45,30 @@ export function AssetEditForm({
       ) : null}
 
       <Field
-        label="Description"
-        htmlFor="edit-description"
-        error={state.fieldErrors?.description}
+        label="Name"
+        htmlFor="edit-name"
+        error={state.fieldErrors?.name}
         required
       >
         {(field) => (
-          <Textarea {...field} id={field.id} name="description" rows={2} defaultValue={asset.description} />
+          <Input {...field} id={field.id} name="name" defaultValue={asset.description.replace(/\s*\([^)]*\)$/, "")} />
+        )}
+      </Field>
+
+      <Field
+        label="Brand"
+        htmlFor="edit-brand"
+        error={state.fieldErrors?.brand}
+        hint={'Optional. Composes the name as "Name (Brand)".'}
+      >
+        {(field) => (
+          <Input
+            {...field}
+            id={field.id}
+            name="brand"
+            defaultValue={asset.brand ?? ""}
+            placeholder="HP, Dell, Lenovo…"
+          />
         )}
       </Field>
 

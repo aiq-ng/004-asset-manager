@@ -1,22 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { changePasswordAction } from "@/features/settings/actions";
+import { ChangePasswordForm } from "@/features/settings/change-password-form";
 import {
   useSystemPrefersDark,
   useThemeMode,
   type ThemePreference,
 } from "@/components/providers/theme-mode-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/controls";
-import { SubmitButton } from "@/components/ui/submit-button";
-import { Alert } from "@/components/ui/feedback";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils/cn";
-import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 
 const MODES: { value: ThemePreference; label: string; hint: string }[] = [
   { value: "light", label: "Light", hint: "Always light, ignoring your system setting." },
@@ -134,87 +127,13 @@ function AppearanceCard() {
 }
 
 function ChangePasswordCard({ email, hasPassword }: { email: string; hasPassword: boolean }) {
-  const [state, formAction] = useActionState(changePasswordAction, INITIAL_ACTION_STATE);
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Change password</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="flex flex-col gap-c54-4">
-          {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
-
-          <Field
-            label="Current password"
-            htmlFor="current-password"
-            error={state.fieldErrors?.currentPassword}
-            hint={
-              hasPassword
-                ? "Required. Signing in elsewhere stays signed out."
-                : "This account has no password yet, so leave this blank."
-            }
-          >
-            {(field) => (
-              <Input
-                {...field}
-                id={field.id}
-                name="currentPassword"
-                type="password"
-                autoComplete="current-password"
-              />
-            )}
-          </Field>
-
-          <Field
-            label="New password"
-            htmlFor="new-password"
-            error={state.fieldErrors?.newPassword}
-            hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
-            required
-          >
-            {(field) => (
-              <Input
-                {...field}
-                id={field.id}
-                name="newPassword"
-                type="password"
-                autoComplete="new-password"
-                minLength={MIN_PASSWORD_LENGTH}
-                required
-              />
-            )}
-          </Field>
-
-          <Field
-            label="Confirm new password"
-            htmlFor="confirm-password"
-            error={state.fieldErrors?.confirmPassword}
-            hint="Must match the new password."
-            required
-          >
-            {(field) => (
-              <Input
-                {...field}
-                id={field.id}
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                minLength={MIN_PASSWORD_LENGTH}
-                required
-              />
-            )}
-          </Field>
-
-          <Alert tone="info">
-            Changing your password signs out every other device. You stay signed in here.
-          </Alert>
-
-          <div className="flex items-center gap-c54-3 border-t border-c54-border-default pt-c54-4">
-            <SubmitButton pendingLabel="Updating…">Update password</SubmitButton>
-            <span className="truncate text-c54-2xs text-c54-text-muted">{email}</span>
-          </div>
-        </form>
+        <ChangePasswordForm email={email} hasPassword={hasPassword} action={changePasswordAction} />
       </CardContent>
     </Card>
   );

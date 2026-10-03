@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -57,6 +58,12 @@ export function LoginForm({ next }: { next: string }) {
       <SubmitButton pendingLabel="Signing in…" fullWidth size="lg">
         Sign in
       </SubmitButton>
+
+      <div className="text-center">
+        <Link href="/forgot-password" className="text-c54-sm text-c54-text-secondary hover:underline">
+          Forgot password?
+        </Link>
+      </div>
     </form>
   );
 }

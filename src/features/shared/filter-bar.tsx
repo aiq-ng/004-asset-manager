@@ -114,7 +114,7 @@ export function FilterBar({
             debounce.current = setTimeout(() => setParam(term, value.trim()), 400);
           }}
           placeholder={placeholder}
-          className="h-9 w-full rounded-c54-input border border-c54-border-default bg-c54-bg-card pr-c54-3 pl-9 text-c54-sm text-c54-text-primary placeholder:text-c54-text-muted transition-[border-color,box-shadow] duration-c54-fast hover:border-c54-border-strong focus:border-c54-action-primary focus:ring-2 focus:ring-c54-action-primary/25 focus:outline-none"
+          className="h-9 w-full max-w-[15.5rem] rounded-c54-input border border-c54-border-default bg-c54-bg-card pr-c54-3 pl-9 text-c54-sm text-c54-text-primary placeholder:text-c54-text-muted transition-[border-color,box-shadow] duration-c54-fast hover:border-c54-border-strong focus:border-c54-action-primary focus:ring-2 focus:ring-c54-action-primary/25 focus:outline-none"
         />
       </form>
 

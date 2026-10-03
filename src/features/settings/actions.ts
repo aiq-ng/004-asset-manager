@@ -44,3 +44,16 @@ export const changePasswordAction = defineAction(
     redirect: () => "/settings",
   },
 );
+
+/**
+ * The same change for the sidebar modal, which closes itself on success
+ * instead of navigating to the settings page.
+ */
+export const changePasswordModalAction = defineAction(
+  settingsChangePasswordSchema,
+  (input, actor) => changePassword(actor.id, input.currentPassword ?? "", input.newPassword),
+  {
+    route: "action:changePassword",
+    successMessage: "Password updated.",
+  },
+);

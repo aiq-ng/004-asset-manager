@@ -47,7 +47,7 @@ export function formatUnit(position: number, total?: number): string {
   return `${String(position).padStart(String(total).length, "0")} of ${total}`;
 }
 
-function C54Logo({ label }: { label: string }) {
+function C54Logo() {
   return (
     <div className="relative aspect-[396/418] w-[31cqw] shrink-0 overflow-hidden rounded-[0.8cqw] bg-c54-blue">
       {/* A static brand asset from /public: `next/image` would only add a
@@ -61,7 +61,7 @@ function C54Logo({ label }: { label: string }) {
       {/* Dynamic band: starts ~68% down in the reference */}
       <div className="absolute inset-x-0 bottom-0 flex h-[32%] items-center justify-center bg-c54-red">
         <span className="text-[7.4cqw] font-black uppercase leading-none tracking-[-0.02em] text-white">
-          {label}
+          News
         </span>
       </div>
     </div>
@@ -89,8 +89,7 @@ export function AssetTag({
 
         {/* Body */}
         <main className="flex flex-1 items-center gap-[3.2cqw] px-[4.4cqw]">
-          <C54Logo label={logoLabel} />
-
+          <C54Logo/>
           <section className="flex-1">
             <p className="text-[2.2cqw] font-semibold tracking-wide text-c54-gray">ASSET NO.</p>
             <p className="whitespace-nowrap text-[4.4cqw] font-extrabold leading-tight tracking-[-0.02em]">

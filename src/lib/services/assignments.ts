@@ -33,6 +33,12 @@ export interface AssignmentDto {
     email: string;
     phone: string | null;
   };
+  /** Who handed the asset over; null for rows written before this was recorded. */
+  assignedBy: {
+    id: string;
+    name: string;
+    department: string;
+  } | null;
 }
 
 function toDto(row: AssignmentRecord): AssignmentDto {
@@ -50,6 +56,13 @@ function toDto(row: AssignmentRecord): AssignmentDto {
       status: row.asset.status,
     },
     staff: toStaffDto(row.staff),
+    assignedBy: row.assignedBy
+      ? {
+          id: row.assignedBy.id,
+          name: row.assignedBy.name,
+          department: row.assignedBy.department.name,
+        }
+      : null,
   };
 }
 
@@ -106,6 +119,9 @@ export async function createAssignment(
           assetId: asset.id,
           staffId: staff.id,
           note: input.note ?? null,
+          // The assigner is the authenticated actor, taken from the session —
+          // never from the request body.
+          assignedById: actor.id,
         },
       });
 
@@ -136,6 +152,7 @@ export async function createAssignment(
         assetDbId: asset.id,
         staffId: staff.id,
         staffRole: staff.role,
+        assignedById: actor.id,
         note: assignment.note,
       },
     });

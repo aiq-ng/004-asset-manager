@@ -108,7 +108,7 @@ function StaffCreateDialog({
           label="Initial password"
           htmlFor="staff-password"
           error={state.fieldErrors?.password}
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters. Leave blank to create a locked account.`}
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters. Leave blank to email the member a temporary password instead.`}
         >
           {(field) => (
             <Input

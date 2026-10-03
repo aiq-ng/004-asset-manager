@@ -25,6 +25,27 @@ const CURRENT_COST = { keylen: KEY_LENGTH, saltLength: SALT_LENGTH };
 // lives in a module with no Node builtins, so client forms can use it too.
 export { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 
+/**
+ * Alphabet for generated passwords: digits, upper and lower case, with lookalike
+ * characters (0 O 1 l I) removed, because these passwords arrive by email where
+ * a mistyped l/1 means a failed sign-in with no one to ask.
+ */
+const GENERATED_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/**
+ * A random password for invite emails: meets the length policy by construction
+ * and is unambiguous to read or retype. The recipient is prompted to replace it
+ * (or simply keeps it — it is generated from crypto-grade randomness either way).
+ */
+export function generateTemporaryPassword(length = 14): string {
+  const bytes = randomBytes(length);
+  let password = "";
+  for (let i = 0; i < length; i++) {
+    password += GENERATED_ALPHABET[bytes[i] % GENERATED_ALPHABET.length];
+  }
+  return password;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(CURRENT_COST.saltLength);
   const hash = await scrypt(password.normalize("NFKC"), salt, CURRENT_COST.keylen);

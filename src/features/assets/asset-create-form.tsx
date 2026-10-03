@@ -79,20 +79,30 @@ function AssetCreateDialog({
         </Field>
 
         <Field
-          label="Description"
-          htmlFor="asset-description"
-          error={state.fieldErrors?.description}
+          label="Name"
+          htmlFor="asset-name"
+          error={state.fieldErrors?.name}
           hint="What a person would recognise this as."
           required
         >
           {(field) => (
-            <Textarea
+            <Input
               {...field}
               id={field.id}
-              name="description"
+              name="name"
               placeholder="14-inch developer laptop"
-              rows={2}
             />
+          )}
+        </Field>
+
+        <Field
+          label="Brand"
+          htmlFor="asset-brand"
+          error={state.fieldErrors?.brand}
+          hint={'Optional. Composes the name as "Name (Brand)".'}
+        >
+          {(field) => (
+            <Input {...field} id={field.id} name="brand" placeholder="HP, Dell, Lenovo…" />
           )}
         </Field>
 

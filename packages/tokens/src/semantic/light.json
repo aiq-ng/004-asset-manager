@@ -56,8 +56,8 @@
       "fg": { "$value": "{color.white}" }
     },
     "chrome": {
-      "bg": { "$value": "{color.ink.700}" },
-      "fg": { "$value": "{color.white}" }
+      "bg": { "$value": "{color.bg.muted}" },
+      "fg": { "$value": "{color.text.primary}" }
     }
   },
   "space": {

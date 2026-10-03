@@ -16,7 +16,10 @@ export const assetInclude = {
     where: { dateReturned: null },
     orderBy: { dateAssigned: "desc" },
     take: 1,
-    include: { staff: { select: staffSelect } },
+    include: {
+      staff: { select: staffSelect },
+      assignedBy: { select: staffSelect },
+    },
   },
 } satisfies Prisma.AssetInclude;
 
@@ -25,13 +28,17 @@ export const assetWithHistoryInclude = {
   ...assetInclude,
   assignments: {
     orderBy: { dateAssigned: "desc" },
-    include: { staff: { select: staffSelect } },
+    include: {
+      staff: { select: staffSelect },
+      assignedBy: { select: staffSelect },
+    },
   },
 } satisfies Prisma.AssetInclude;
 
 export const assignmentInclude = {
   asset: { include: { assetType: { select: { id: true, name: true, code: true } } } },
   staff: { select: staffSelect },
+  assignedBy: { select: staffSelect },
 } satisfies Prisma.AssignmentInclude;
 
 export type AssetRecord = Prisma.AssetGetPayload<{ include: typeof assetInclude }>;
@@ -49,6 +56,8 @@ type AssignmentRow = {
   dateReturned: Date | null;
   note: string | null;
   staff: StaffRecord;
+  /** Null only for rows written before this was recorded. */
+  assignedBy: StaffRecord | null;
 };
 
 export interface StaffDto {
@@ -76,12 +85,15 @@ export interface AssignmentDto {
   dateReturned: string | null;
   note: string | null;
   staff: StaffDto;
+  /** Who handed the asset over; null for legacy rows. */
+  assignedBy: StaffDto | null;
 }
 
 export interface AssetDto {
   id: string;
   assetId: string;
   description: string;
+  brand: string | null;
   unit: number;
   serialNumber: string | null;
   status: string;
@@ -117,6 +129,7 @@ function toAssignmentDto(row: AssignmentRow): AssignmentDto {
     dateReturned: row.dateReturned ? row.dateReturned.toISOString() : null,
     note: row.note,
     staff: toStaffDto(row.staff),
+    assignedBy: row.assignedBy ? toStaffDto(row.assignedBy) : null,
   };
 }
 
@@ -129,6 +142,7 @@ function toAssetBase(asset: AssetRow, imageUrl: string | null): AssetDto {
     id: asset.id,
     assetId: asset.assetId,
     description: asset.description,
+    brand: asset.brand,
     unit: asset.unit,
     serialNumber: asset.serialNumber,
     status: asset.status,

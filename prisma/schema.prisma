@@ -64,6 +64,7 @@ model Asset {
   assetId      String       @unique
   assetTypeId  String
   description  String
+  brand        String?
   unit         Int          @default(1)
   serialNumber String?      @unique
   imageKey     String?
@@ -105,10 +106,19 @@ model Staff {
   role         StaffRole  @default(USER)
   // NULL means "no password yet": the account cannot log in.
   passwordHash  String?
+  // Set when the account was invited by email and received a temporary password.
+  invitedAt     DateTime?
+  // True while the account is signed in with a temporary password handed out by
+  // an invite: every page and API route except password change/sign-out/metadata
+  // refuses to run until they set their own.
+  mustChangePassword Boolean @default(false)
   // Bumped on sign-out and password changes to revoke outstanding cookies.
   sessionVersion Int      @default(0)
 
   assignments Assignment[]
+  // Assets this staff member handed out (via the "Assigned by" column).
+  assignedAssignments Assignment[] @relation("AssignmentAssignedBy")
+  resetTokens PasswordResetToken[]
   auditLogs   AuditLog[]
 
   createdAt DateTime @default(now())
@@ -125,6 +135,11 @@ model Assignment {
   dateAssigned DateTime  @default(now())
   dateReturned DateTime?
   note         String?
+  // Who handed the asset over — always set by the service from the
+  // authenticated actor, never from client input. Nullable so rows written
+  // before this field existed stay valid.
+  assignedById String?
+  assignedBy   Staff?    @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
@@ -134,6 +149,25 @@ model Assignment {
   @@index([assetId])
   @@index([staffId])
   @@index([staffId, dateReturned])
+  @@index([assignedById])
+}
+
+/// Single-use, short-lived tokens behind the "forgot password" flow. Only the
+/// SHA-256 digest of the token is stored, so a database leak cannot be replayed
+/// against the reset endpoint. Rows are deleted when consumed; expired ones are
+/// swept opportunistically on each new request.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  staffId   String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
 }
 
 model Counter {

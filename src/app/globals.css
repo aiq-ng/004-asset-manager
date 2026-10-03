@@ -193,8 +193,7 @@
  * The typeface override rides the same seam for the same reason: the package
  * asks for Geist, the app ships Inter, and pointing the `font.family` tokens at
  * the `next/font` variables swaps the whole UI without touching a single
- * component. `--font-inter` / `--font-geist-mono` are defined on <html> by
- * src/app/layout.tsx.
+ * component. `--font-inter` is defined on <html> by src/app/layout.tsx.
  *
  * Unlayered on purpose: the generated token sheet is unlayered too, and these
  * equal-specificity selectors only win because they come later in the cascade.
@@ -214,7 +213,7 @@
 
   --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
   --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
-  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --c54-font-family-mono: var(--font-inter), ui-monospace, monospace;
 }
 
 [data-c54-theme][data-c54-mode="dark"] {
@@ -223,7 +222,7 @@
 
   --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
   --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
-  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --c54-font-family-mono: var(--font-inter), ui-monospace, monospace;
 }
 
 @layer base {
@@ -239,6 +238,12 @@
 
   html[data-c54-mode="dark"] {
     color-scheme: dark;
+  }
+
+  /* The app shell's content column is white in light mode, so pages read as
+     sheets on the gray canvas. Dark mode keeps the token surface. */
+  [data-c54-theme]:not([data-c54-mode="dark"]) .c54-app-content {
+    background-color: #fff;
   }
 
   body {
@@ -474,7 +479,7 @@
 
 /* On screen the sheet scales to the viewport but keeps A4's proportions, so the
    preview has the same aspect as the paper it stands in for. */
-@screen {
+@media screen {
   .c54-label-documents {
     display: flex;
     flex-direction: column;

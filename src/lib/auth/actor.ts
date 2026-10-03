@@ -30,6 +30,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
       department: { select: { name: true } },
       role: true,
       sessionVersion: true,
+      mustChangePassword: true,
     },
   });
 
@@ -42,6 +43,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     email: staff.email,
     department: staff.department.name,
     role: staff.role,
+    mustChangePassword: staff.mustChangePassword,
   };
 });
 
@@ -65,5 +67,6 @@ export function toActorDto(actor: Actor) {
     email: actor.email,
     department: actor.department,
     role: actor.role,
+    mustChangePassword: actor.mustChangePassword,
   };
 }

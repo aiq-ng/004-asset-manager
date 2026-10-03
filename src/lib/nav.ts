@@ -18,8 +18,7 @@ export type NavIcon =
   | "layers"
   | "users"
   | "building"
-  | "audit"
-  | "settings";
+  | "audit";
 
 export interface NavItem {
   href: string;
@@ -54,19 +53,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     description: "The shared department list",
     icon: "building",
   },
-  {
-    href: "/audit",
-    label: "Audit trail",
-    description: "Every recorded change",
-    permission: "audit:read",
-    icon: "audit",
-  },
-  {
-    href: "/settings",
-    label: "Settings",
-    description: "Appearance and your account",
-    icon: "settings",
-  },
+  // {
+  //   href: "/audit",
+  //   label: "Audit trail",
+  //   description: "Every recorded change",
+  //   permission: "audit:read",
+  //   icon: "audit",
+  // },
 ];
 
 export function navItemsFor(role: StaffRole): NavItem[] {
