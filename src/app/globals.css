@@ -27,6 +27,7 @@
   --animate-fade-in: fade-in var(--c54-duration-fast) var(--c54-ease-out) both;
   --animate-fade-out: fade-out var(--c54-duration-fast) var(--c54-ease-out) both;
   --animate-rise: rise var(--c54-duration-base) var(--c54-ease-out) both;
+  --animate-rise-up: rise-up var(--c54-duration-base) var(--c54-ease-out) both;
   --animate-slide-in: slide-in var(--c54-duration-base) var(--c54-ease-out) both;
   --animate-sheet-in: sheet-in var(--c54-duration-slow) var(--c54-ease-out) both;
   --animate-sheet-out: sheet-out var(--c54-duration-base) var(--c54-ease-in-out) both;
@@ -106,6 +107,20 @@
   from {
     opacity: 0;
     transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mirror of `rise` for panels that open above their trigger: the motion must
+   grow out of the edge the panel is anchored to, so an upward-flipped menu
+   slides up from the trigger rather than down from thin air. */
+@keyframes rise-up {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
   }
   to {
     opacity: 1;

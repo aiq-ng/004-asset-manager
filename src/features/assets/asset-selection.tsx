@@ -122,6 +122,13 @@ export function AssetSelectAllCheckbox() {
 /**
  * The bar that appears once anything is selected.
  *
+ * Fixed to the top of the viewport, just under the sticky masthead, rather than
+ * floating at the bottom: selection starts at a checkbox wherever the row sits
+ * in a long table, and a bottom-anchored bar is not even on screen for the rows
+ * near the top — the tick happens, nothing answers. Pinned under the header it
+ * is visible from the first tick at any scroll position, and being out of the
+ * document flow it never shifts the table when it appears or disappears.
+ *
  * A link rather than a button that navigates, because the destination is a real
  * page: the run can be previewed, bookmarked, shared or re-printed, and the
  * browser's Back button means the way out of a hundred-label run is the same as
@@ -138,8 +145,8 @@ export function LabelPrintBar() {
   const ids = [...selected].sort();
 
   return (
-    <div className="c54-no-print sticky bottom-c54-4 z-20 mx-auto mt-c54-4 w-fit">
-      <div className="flex items-center gap-c54-3 rounded-c54-card border border-c54-border-strong bg-c54-bg-elevated py-c54-2 pl-c54-pad-lg pr-c54-2 shadow-c54-lg">
+    <div className="c54-no-print fixed inset-x-0 top-[calc(var(--c54-header-height)+0.5rem)] z-30 flex justify-center px-c54-4">
+      <div className="flex animate-rise-up items-center gap-c54-3 rounded-c54-card border border-c54-border-strong bg-c54-bg-elevated py-c54-2 pl-c54-pad-lg pr-c54-2 shadow-c54-lg">
         <p className="text-c54-sm text-c54-text-primary">
           <span className="font-c54-mono font-c54-semibold">{count}</span>{" "}
           {count === 1 ? "asset" : "assets"} selected

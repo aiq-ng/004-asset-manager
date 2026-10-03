@@ -86,9 +86,14 @@ export function FilterBar({
   const activeCount = Array.from(searchParams.keys()).filter((key) => key !== "page").length;
 
   return (
+    // The row packs to the left on purpose: the selects sit right beside the
+    // search box rather than scattered across it, because a filter that reads as
+    // attached to the search is read as applying to the same list. `flex-1` on
+    // the form used to stretch it across the row and shove every select to the
+    // far edge, which is exactly the gap this layout exists to avoid.
     <div className="flex flex-col gap-c54-3 xl:flex-row xl:items-end">
       <form
-        className="relative min-w-0 flex-1"
+        className="relative w-full xl:w-[15.5rem]"
         onSubmit={(event) => {
           event.preventDefault();
           setParam(term, text.trim());

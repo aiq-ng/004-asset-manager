@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { VerticalTimeline, VerticalTimelineElement } from "react-vertical-timeline-component";
+import "react-vertical-timeline-component/style.min.css";
 
 import { returnAssetAction } from "@/features/assets/actions";
 import { AssignAssetDialog } from "@/features/assets/assign-asset-dialog";
@@ -133,7 +135,13 @@ export function AssignmentPanel({
   );
 }
 
-/** Full history of assignments, newest first. */
+/**
+ * Full history of assignments, newest first, as a vertical timeline.
+ *
+ * The library draws the rail and the icon bubbles; its default card (white
+ * background, shadow, arrow, padding) is stripped so the entry text sits on
+ * the surrounding `Card` and uses the c54 tokens.
+ */
 export function AssignmentHistory({
   history,
 }: {
@@ -153,36 +161,58 @@ export function AssignmentHistory({
   }
 
   return (
-    <ol className="relative space-y-c54-4 border-l border-c54-border-default pl-c54-5">
-      {history.map((entry) => {
-        const active = entry.dateReturned === null;
+    <div
+      className={
+        "[&_.vertical-timeline]:mt-0 [&_.vertical-timeline]:w-full " +
+        "[&_.vertical-timeline]:max-w-none [&_.vertical-timeline]:py-0 " +
+        "[&_.vertical-timeline-element]:my-c54-5"
+      }
+    >
+      <VerticalTimeline
+        layout="1-column-left"
+        animate={false}
+        lineColor="var(--color-c54-border-default)"
+      >
+        {history.map((entry) => {
+          const active = entry.dateReturned === null;
 
-        return (
-          <li key={entry.id} className="relative">
-            <span
-              aria-hidden="true"
-              className={`absolute top-1.5 -left-c54-6 size-2.5 rounded-c54-full border-2 border-c54-bg-card ${
-                active ? "bg-c54-status-healthy" : "bg-c54-border-strong"
-              }`}
-            />
-            <p className="text-c54-sm font-c54-medium text-c54-text-primary">
-              {entry.staff.name}
-              <span className="ml-c54-2 font-c54-normal text-c54-text-muted">
-                {entry.staff.department}
-              </span>
-            </p>
-            <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
-              {formatDay(entry.dateAssigned)}
-              {entry.dateReturned ? ` → ${formatDay(entry.dateReturned)}` : " → present"}
-              {entry.assignedBy ? ` · by ${entry.assignedBy.name}` : ""}
-            </p>
-            {entry.note ? (
-              <p className="mt-c54-2 text-c54-xs text-c54-text-secondary">{entry.note}</p>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
+          return (
+            <VerticalTimelineElement
+              key={entry.id}
+              contentStyle={{ background: "transparent", boxShadow: "none", padding: 0 }}
+              contentArrowStyle={{ display: "none" }}
+              iconClassName={
+                active
+                  ? "bg-c54-status-healthy text-white"
+                  : "bg-c54-bg-card text-c54-text-muted border border-c54-border-strong"
+              }
+              iconStyle={{ boxShadow: "0 0 0 4px var(--color-c54-bg-card)" }}
+              icon={active ? <Icons.Plus /> : <Icons.Refresh />}
+            >
+              <p className="flex flex-wrap items-baseline gap-x-c54-2 text-c54-sm font-c54-medium text-c54-text-primary">
+                {entry.staff.name}
+                <span className="font-c54-normal text-c54-text-muted">
+                  {entry.staff.department}
+                </span>
+                {active ? (
+                  <span className="text-c54-2xs font-c54-medium text-c54-status-healthy">
+                    Current holder
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
+                {formatDay(entry.dateAssigned)}
+                {entry.dateReturned ? ` → ${formatDay(entry.dateReturned)}` : " → present"}
+                {entry.assignedBy ? ` · by ${entry.assignedBy.name}` : ""}
+              </p>
+              {entry.note ? (
+                <p className="mt-c54-2 text-c54-xs text-c54-text-secondary">{entry.note}</p>
+              ) : null}
+            </VerticalTimelineElement>
+          );
+        })}
+      </VerticalTimeline>
+    </div>
   );
 }
 
