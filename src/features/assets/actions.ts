@@ -1,9 +1,9 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { unstable_rethrow } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
-import { defineAction, toFailure } from "@/lib/server/define-action";
+import { defineAction, actionRequestContext, toFailure } from "@/lib/server/define-action";
 import {
   createAsset,
   createAssetsInBulk,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/assets";
 import { createAssignment, returnAssignment } from "@/lib/services/assignments";
 import { parseUploadedImage } from "@/lib/services/images";
+import type { AssetDto } from "@/lib/services/serializers";
 import {
   bulkAssetEntrySchema,
   bulkAssetSubmitSchema,
@@ -21,12 +22,12 @@ import {
   updateAssetSchema,
   updateAssetStatusSchema,
 } from "@/lib/validators/asset";
-import { createAssignmentSchema } from "@/lib/validators/assignment";
+import { createAssignmentSchema, returnAssignmentSchema } from "@/lib/validators/assignment";
 import { ApiError } from "@/lib/errors";
 import { runWithRequestContext } from "@/lib/audit/context";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getActor } from "@/lib/auth/actor";
-import type { ActionState } from "@/lib/server/action-state";
+import { formDataToObject, toFieldErrors, type ActionState } from "@/lib/server/action-state";
 import { z } from "zod";
 
 /**
@@ -47,18 +48,62 @@ const returnRefSchema = z.object({
   assignmentId: z.string().trim().min(1, "assignmentId is required").max(64),
 });
 
-export const createAssetAction = defineAction(
-  createAssetSchema,
-  (input) => createAsset(input),
-  {
-    route: "action:createAsset",
-    permission: "asset:manage",
-    successMessage: "Asset registered.",
+/**
+ * Registers a new asset, with an optional photo taken at intake.
+ *
+ * Hand-rolled rather than `defineAction` for the same reason the image actions
+ * are: the photo arrives as a `File` in the `FormData`, and the shared
+ * `formDataToObject` drops non-string entries by design. The guarantees match
+ * the factory — actor, permission, audit context, serialisable failures — plus
+ * the redirect to the record just created, which also makes a reload unable to
+ * resubmit the form.
+ *
+ * The image goes on *after* the row exists, through the same `replaceAssetImage`
+ * path the detail page uses, so there is exactly one implementation of
+ * upload-then-point-then-cleanup to reason about. A failure there leaves the
+ * asset registered and photo-less rather than half-created.
+ */
+export async function createAssetAction(
+  _previousState: ActionState<AssetDto>,
+  formData: FormData,
+): Promise<ActionState<AssetDto>> {
+  try {
+    const actor = await getActor();
+    if (!actor) throw ApiError.unauthenticated("Your session has expired. Please sign in again.");
+    requirePermission(actor, "asset:manage");
+
+    const input = createAssetSchema.parse(formDataToObject(formData));
+
+    const file = formData.get("file");
+    const image =
+      file instanceof File && file.size > 0 ? await parseUploadedImage(file) : undefined;
+
+    const created = await runWithRequestContext(
+      await actionRequestContext("action:createAsset", actor),
+      async () => {
+        const created = await createAsset(input);
+        if (image) await replaceAssetImage(created.assetId, image);
+        return created;
+      },
+    );
+
     // Land on the record just created; redirecting also means a reload cannot
     // resubmit the form.
-    redirect: (created) => `/assets/${created.assetId}`,
-  },
-);
+    redirect(`/assets/${created.assetId}`);
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof z.ZodError) {
+      return {
+        ok: false,
+        error: "Please correct the highlighted fields.",
+        fieldErrors: toFieldErrors(error),
+      };
+    }
+
+    return toFailure(error);
+  }
+}
 
 /**
  * Creates one row of a batch register.
@@ -144,15 +189,59 @@ export const assignAssetAction = defineAction(
   },
 );
 
-export const returnAssetAction = defineAction(
-  returnRefSchema,
-  ({ assignmentId }) => returnAssignment(assignmentId),
-  {
-    route: "action:returnAssignment",
-    permission: "assignment:return",
-    successMessage: "Return recorded.",
-  },
-);
+/**
+ * Records a return, with the condition note and photo the dialog captures.
+ *
+ * Hand-rolled like the image actions: the note is a plain string, but the photo
+ * is a `File`, which `defineAction`'s FormData parsing drops. The permission
+ * check, audit context and serialisable failures match the factory.
+ *
+ * `returnedById` — the "return accepted by" record the UI shows on the history
+ * timeline — is set inside the service from the authenticated actor, never from
+ * client input.
+ */
+export async function returnAssetAction(
+  _previousState: ActionState<undefined>,
+  formData: FormData,
+): Promise<ActionState<undefined>> {
+  try {
+    const actor = await getActor();
+    if (!actor) throw ApiError.unauthenticated("Your session has expired. Please sign in again.");
+    requirePermission(actor, "assignment:return");
+
+    const { assignmentId } = returnRefSchema.parse({
+      assignmentId: formData.get("assignmentId"),
+    });
+
+    const rawNote = formData.get("returnNote");
+    const { returnNote } = returnAssignmentSchema.parse({
+      returnNote: typeof rawNote === "string" ? rawNote : undefined,
+    });
+
+    const file = formData.get("file");
+    const image =
+      file instanceof File && file.size > 0 ? await parseUploadedImage(file) : undefined;
+
+    await runWithRequestContext(await actionRequestContext("action:returnAssignment", actor), () =>
+      returnAssignment(assignmentId, { returnNote, image }, actor),
+    );
+
+    refresh();
+    return { ok: true, error: "", message: "Return recorded." };
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof z.ZodError) {
+      return {
+        ok: false,
+        error: "Please correct the highlighted fields.",
+        fieldErrors: toFieldErrors(error),
+      };
+    }
+
+    return toFailure(error);
+  }
+}
 
 /** Retire is a plain submit button, so it needs the form-only signature. */
 export async function retireAssetFormAction(formData: FormData): Promise<void> {

@@ -35,5 +35,24 @@ export const assignmentIdParamSchema = z.object({
   id: z.string().trim().min(1, "Assignment id is required").max(64),
 });
 
+/**
+ * Optional detail captured when an assignment is closed.
+ *
+ * `returnNote` describes the asset's condition at handover. Both it and the
+ * return photo are optional: a return can be recorded from a desk with nothing
+ * to photograph, and refusing the whole return over a missing optional field
+ * would block the state change the register actually needs.
+ */
+export const returnAssignmentSchema = z.object({
+  returnNote: z
+    .string()
+    .trim()
+    .max(500, "returnNote must be <= 500 characters")
+    .transform((value) => (value === "" ? null : value))
+    .nullable()
+    .optional(),
+});
+
 export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
+export type ReturnAssignmentInput = z.infer<typeof returnAssignmentSchema>;
 export type ListAssignmentsQuery = z.infer<typeof listAssignmentsQuerySchema>;

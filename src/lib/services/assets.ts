@@ -26,6 +26,18 @@ async function signImage(imageKey: string | null): Promise<string | null> {
   return getStorage().getPresignedUrl(imageKey);
 }
 
+/**
+ * Presigned GET URL for any stored object key — return photos included.
+ *
+ * Return photos hang off assignment rows rather than assets, so the assignment
+ * services keep their DTOs key-only and the pages that display a photo call
+ * this per row. Keeping the signing at the read site means a list endpoint
+ * never pays for signatures on rows nobody is looking at.
+ */
+export async function signStorageUrl(key: string): Promise<string> {
+  return getStorage().getPresignedUrl(key);
+}
+
 /** Accepts either a database id or the human asset id (`IT-LAP-0001`), so QR scans resolve. */
 function toAssetWhere(idOrAssetId: string): { id: string } | { assetId: string } {
   return idOrAssetId.startsWith("IT-") ? { assetId: idOrAssetId } : { id: idOrAssetId };

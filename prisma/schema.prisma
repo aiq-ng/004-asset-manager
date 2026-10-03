@@ -118,6 +118,8 @@ model Staff {
   assignments Assignment[]
   // Assets this staff member handed out (via the "Assigned by" column).
   assignedAssignments Assignment[] @relation("AssignmentAssignedBy")
+  // Returns this staff member accepted (via the "Return accepted by" record).
+  returnedAssignments Assignment[] @relation("AssignmentReturnedBy")
   resetTokens PasswordResetToken[]
   auditLogs   AuditLog[]
 
@@ -141,6 +143,17 @@ model Assignment {
   assignedById String?
   assignedBy   Staff?    @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
+  // Return record. `returnNote` describes the condition at handover and
+  // `returnImageKey` points at the photo of the asset as it came back (same
+  // bucket layout as asset photos, `assignments/{id}/{uuid}.{ext}`).
+  // `returnedBy` is the privileged actor who accepted the return — again from
+  // the session, never from client input. All nullable: legacy rows and returns
+  // recorded before these fields existed stay valid.
+  returnNote     String?
+  returnImageKey String?
+  returnedById   String?
+  returnedBy     Staff?    @relation("AssignmentReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
 
@@ -150,6 +163,7 @@ model Assignment {
   @@index([staffId])
   @@index([staffId, dateReturned])
   @@index([assignedById])
+  @@index([returnedById])
 }
 
 /// Single-use, short-lived tokens behind the "forgot password" flow. Only the

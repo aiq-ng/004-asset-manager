@@ -6,11 +6,14 @@ import { createAssetAction } from "@/features/assets/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Input, Select } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
+import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
+
+const MAX_IMAGE_MB = IMAGE_UPLOAD_MAX_BYTES / (1024 * 1024);
 
 export interface AssetTypeOption {
   id: string;
@@ -39,6 +42,7 @@ function AssetCreateDialog({
 }) {
   const [state, formAction] = useActionState(createAssetAction, INITIAL_ACTION_STATE);
   const [unit, setUnit] = useState("1");
+  const [photoName, setPhotoName] = useState<string | null>(null);
 
   return (
     <Dialog
@@ -129,6 +133,41 @@ function AssetCreateDialog({
             />
           )}
         </Field>
+
+        {/* Same shape as the detail page's photo manager: the file input is the
+            whole control rather than a staged crop flow. The photo rides along
+            with the create submission, so a fresh asset lands on its detail page
+            already pictured instead of needing a second trip to attach one. */}
+        <div className="flex flex-col gap-c54-1">
+          <label
+            htmlFor="asset-photo"
+            className="block text-c54-xs font-c54-medium text-c54-text-primary"
+          >
+            Photo
+          </label>
+          <label
+            htmlFor="asset-photo"
+            className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
+          >
+            <Icons.Upload className="size-3.5" />
+            {photoName ?? "Choose an image (optional)"}
+            <input
+              id="asset-photo"
+              type="file"
+              name="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? null)}
+            />
+          </label>
+          <p className="text-c54-2xs text-c54-text-muted">
+            JPEG, PNG or WebP, up to {MAX_IMAGE_MB} MB. Identifies the item on the shelf; you can
+            also add or replace it later from the asset page.
+          </p>
+          {state.fieldErrors?.file ? (
+            <p className="text-c54-2xs text-c54-text-danger">{state.fieldErrors.file}</p>
+          ) : null}
+        </div>
 
         <p className="border-t border-c54-border-default pt-c54-3 text-c54-2xs text-c54-text-muted">
           The asset id is allocated on save and cannot be changed afterwards.

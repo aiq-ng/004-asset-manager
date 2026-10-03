@@ -158,6 +158,16 @@ export function buildObjectKey(assetId: string, extension: string): string {
   return `assets/${assetId}/${randomUUID()}.${extension}`;
 }
 
+/**
+ * Return photos live beside asset photos in the same bucket, keyed to the
+ * assignment they document: `assignments/{assignmentId}/{uuid}.{ext}`. Unlike an
+ * asset photo there is nothing to replace — a return is written once — so the
+ * uuid keeps the key unique without any replacing semantics.
+ */
+export function buildAssignmentObjectKey(assignmentId: string, extension: string): string {
+  return `assignments/${assignmentId}/${randomUUID()}.${extension}`;
+}
+
 let instance: ObjectStorage | undefined;
 
 /** Storage implementation used by the services; swap it to move to AWS S3, etc. */

@@ -22,7 +22,7 @@ import { listDepartmentOptions } from "@/lib/services/departments";
 import { getStaff } from "@/lib/services/staff";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
-import { formatDate, formatRelative } from "@/lib/utils/format";
+import { StaffAssignmentHistory } from "@/components/ui/staff-assignment-history";
 
 /**
  * Staff detail: the person, what they are holding, and everything they have ever
@@ -32,7 +32,6 @@ import { formatDate, formatRelative } from "@/lib/utils/format";
 export default async function StaffDetailPage({ params }: PageProps<"/staff/[staffId]">) {
   const actor = await requirePageActor();
   const { staffId } = await params;
-  const now = new Date();
 
   let staff;
   try {
@@ -129,60 +128,7 @@ export default async function StaffDetailPage({ params }: PageProps<"/staff/[sta
               <CardTitle>Assignment history</CardTitle>
             </CardHeader>
             <CardContent>
-              {staff.history.length === 0 ? (
-                <p className="text-c54-sm text-c54-text-secondary">No assignments recorded yet.</p>
-              ) : (
-                <Table>
-                  <thead>
-                    <TableRow>
-                      <TableHeader className="w-40">Asset</TableHeader>
-                      <TableHeader>Description</TableHeader>
-                      <TableHeader className="w-36">Assigned</TableHeader>
-                      <TableHeader className="w-36">Returned</TableHeader>
-                      <TableHeader>Note</TableHeader>
-                    </TableRow>
-                  </thead>
-                  <TableBody>
-                    {staff.history.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell>
-                          <Link href={`/assets/${entry.assetId}`} className="hover:underline">
-                            <CodeChip>{entry.assetId}</CodeChip>
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <span className="block text-c54-sm">{entry.asset.description}</span>
-                          <span className="text-c54-2xs text-c54-text-muted">
-                            {entry.asset.assetType.name}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-c54-xs text-c54-text-secondary">
-                          {formatDate(entry.dateAssigned)}
-                        </TableCell>
-                        <TableCell className="text-c54-xs text-c54-text-secondary">
-                          {entry.dateReturned ? (
-                            formatDate(entry.dateReturned)
-                          ) : (
-                            <span className="font-c54-medium text-c54-text-primary">Out now</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-56">
-                          {entry.note ? (
-                            <span
-                              className="block truncate text-c54-xs text-c54-text-secondary"
-                              title={entry.note}
-                            >
-                              {entry.note}
-                            </span>
-                          ) : (
-                            <span className="text-c54-text-muted">—</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              <StaffAssignmentHistory history={staff.history} />
             </CardContent>
           </Card>
         </div>
@@ -204,40 +150,6 @@ export default async function StaffDetailPage({ params }: PageProps<"/staff/[sta
                   {staff.phone ?? <span className="text-c54-text-muted">—</span>}
                 </DetailRow>
                 <DetailRow term="Role">{presentation.label}</DetailRow>
-                <DetailRow term="Can sign in">
-                  {staff.role === "SUPERADMIN" ? "Yes" : "Unless no password was set"}
-                </DetailRow>
-              </DescriptionList>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Permissions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-c54-sm text-c54-text-secondary">{presentation.summary}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Account</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DescriptionList>
-                <DetailRow term="Created">
-                  {formatDate(staff.createdAt)}{" "}
-                  <span className="text-c54-2xs text-c54-text-muted">
-                    ({formatRelative(staff.createdAt, now)})
-                  </span>
-                </DetailRow>
-                <DetailRow term="Updated">{formatDate(staff.updatedAt)}</DetailRow>
-                <DetailRow term="Database id">
-                  <code className="font-c54-mono text-c54-2xs break-all text-c54-text-muted">
-                    {staff.id}
-                  </code>
-                </DetailRow>
               </DescriptionList>
             </CardContent>
           </Card>

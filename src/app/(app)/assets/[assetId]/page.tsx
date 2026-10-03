@@ -18,7 +18,7 @@ import { AssetEditForm } from "@/features/assets/asset-edit-form";
 import { AssetImageManager } from "@/features/assets/asset-image-manager";
 import { AssetRetireControl } from "@/features/assets/asset-retire-control";
 import { AssignmentHistory, AssignmentPanel } from "@/features/assets/assignment-panel";
-import { getAsset } from "@/lib/services/assets";
+import { getAsset, signStorageUrl } from "@/lib/services/assets";
 import { listStaff } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
 import { can } from "@/lib/auth/permissions";
@@ -43,6 +43,16 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
 
   const canManage = can(actor.role, "asset:manage");
   const canAssign = can(actor.role, "assignment:create");
+
+  // Return photos are stored as keys on the assignment rows; the timeline needs
+  // signed URLs to render them. Signed here rather than in the serializer so a
+  // list read never pays for signatures on rows nobody is displaying.
+  const history = await Promise.all(
+    asset.history.map(async (entry) => ({
+      ...entry,
+      returnImageUrl: entry.returnImageKey ? await signStorageUrl(entry.returnImageKey) : null,
+    })),
+  );
 
   // Candidates for the assign dialog, narrowed here by the same rules the
   // service enforces on write — an assigner is never offered themselves or an
@@ -175,7 +185,7 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
               <CardTitle>Assignment history</CardTitle>
             </CardHeader>
             <CardContent>
-              <AssignmentHistory history={asset.history} />
+              <AssignmentHistory history={history} />
             </CardContent>
           </Card>
         </div>

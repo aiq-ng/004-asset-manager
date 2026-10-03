@@ -827,10 +827,16 @@ Errors: `400`, `404`, `409` (already assigned), `422` (asset not `AVAILABLE`).
 
 *Requires: `ASSIGNER`+.*
 
-Stamps `dateReturned` and puts the asset back to `AVAILABLE`. Rows are never deleted. Returning an already-returned assignment is `422`.
+Stamps `dateReturned`, records `returnedBy` ("return accepted by" — always the authenticated actor, never client input) and puts the asset back to `AVAILABLE`. Rows are never deleted. Returning an already-returned assignment is `422`.
+
+The body is optional. When present it may carry `returnNote` (condition description at handover, up to 500 characters). The return *photo* is a UI-only concern — the app's sheet uploads it as a `File`; this JSON endpoint does not accept one.
 
 ```bash
 curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006djzrl7h1mohx/return
+
+curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006djzrl7h1mohx/return \
+  -H 'Content-Type: application/json' \
+  -d '{"returnNote": "Scratched lid; charger included"}'
 ```
 
 ```json
@@ -855,12 +861,19 @@ curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006d
       "email": "diogo.alves@example.com",
       "phone": null,
       "role": "USER"
+    },
+    "returnNote": "Scratched lid; charger included",
+    "returnImageKey": null,
+    "returnedBy": {
+      "id": "cmupqz1rb0008djzr9hh7n4x2k",
+      "name": "Ada Okafor",
+      "department": "IT"
     }
   }
 }
 ```
 
-Errors: `404`, `422` (already returned).
+Errors: `404`, `422` (already returned), `400` (invalid JSON body or `returnNote` over 500 characters).
 
 ### `GET /api/assignments`
 

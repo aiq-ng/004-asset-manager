@@ -19,6 +19,7 @@ export const assetInclude = {
     include: {
       staff: { select: staffSelect },
       assignedBy: { select: staffSelect },
+      returnedBy: { select: staffSelect },
     },
   },
 } satisfies Prisma.AssetInclude;
@@ -31,6 +32,7 @@ export const assetWithHistoryInclude = {
     include: {
       staff: { select: staffSelect },
       assignedBy: { select: staffSelect },
+      returnedBy: { select: staffSelect },
     },
   },
 } satisfies Prisma.AssetInclude;
@@ -39,6 +41,7 @@ export const assignmentInclude = {
   asset: { include: { assetType: { select: { id: true, name: true, code: true } } } },
   staff: { select: staffSelect },
   assignedBy: { select: staffSelect },
+  returnedBy: { select: staffSelect },
 } satisfies Prisma.AssignmentInclude;
 
 export type AssetRecord = Prisma.AssetGetPayload<{ include: typeof assetInclude }>;
@@ -58,6 +61,12 @@ type AssignmentRow = {
   staff: StaffRecord;
   /** Null only for rows written before this was recorded. */
   assignedBy: StaffRecord | null;
+  /** Condition description captured when the assignment was closed. */
+  returnNote: string | null;
+  /** Storage key of the photo taken as the asset came back. */
+  returnImageKey: string | null;
+  /** Who accepted the return; null for legacy rows and still-open assignments. */
+  returnedBy: StaffRecord | null;
 };
 
 export interface StaffDto {
@@ -87,6 +96,12 @@ export interface AssignmentDto {
   staff: StaffDto;
   /** Who handed the asset over; null for legacy rows. */
   assignedBy: StaffDto | null;
+  /** Condition description captured at return; null while still out or legacy. */
+  returnNote: string | null;
+  /** Storage key of the return photo; null while still out or legacy. */
+  returnImageKey: string | null;
+  /** Who accepted the return; null while still out or legacy. */
+  returnedBy: StaffDto | null;
 }
 
 export interface AssetDto {
@@ -130,6 +145,9 @@ function toAssignmentDto(row: AssignmentRow): AssignmentDto {
     note: row.note,
     staff: toStaffDto(row.staff),
     assignedBy: row.assignedBy ? toStaffDto(row.assignedBy) : null,
+    returnNote: row.returnNote,
+    returnImageKey: row.returnImageKey,
+    returnedBy: row.returnedBy ? toStaffDto(row.returnedBy) : null,
   };
 }
 
