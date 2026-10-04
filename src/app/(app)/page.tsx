@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { Inbox } from "lucide-react";
 
 import { CodeChip } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import {
   ListSkeleton,
@@ -119,7 +119,7 @@ async function MyAssetsSection({
     <>
       {mine.length === 0 ? (
         <EmptyState
-          icon={<Icons.Inbox className="size-5" />}
+          icon={<Inbox className="size-5" />}
           title="Nothing assigned to you"
           description="Assets handed to you will be listed here."
         />

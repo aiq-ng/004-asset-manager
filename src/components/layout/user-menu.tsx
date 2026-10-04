@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronRight, LogOut } from "lucide-react";
+
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,7 +10,6 @@ import {
   DropdownMenu,
   DropdownSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Icons } from "@/components/ui/icons";
 import { logoutAction } from "@/features/auth/actions";
 import type { StaffRole } from "@/generated/prisma/client";
 
@@ -55,7 +56,7 @@ export function UserMenu({
             </span>
             <span className="block max-w-40 truncate text-c54-2xs text-c54-text-muted">{department}</span>
           </span>
-          <Icons.ChevronRight className="size-3 rotate-90 text-c54-text-muted" />
+          <ChevronRight className="size-3 rotate-90 text-c54-text-muted" />
         </button>
       )}
     >
@@ -72,7 +73,7 @@ export function UserMenu({
           form rather than a click handler that only exists after hydration. */}
       <form action={logoutAction}>
         <DropdownItem type="submit" danger>
-          <Icons.Logout className="size-3.5" />
+          <LogOut className="size-3.5" />
           Sign out
         </DropdownItem>
       </form>

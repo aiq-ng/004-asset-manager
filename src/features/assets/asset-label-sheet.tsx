@@ -1,4 +1,4 @@
-import { PrintTrigger } from "@/components/layout/print-trigger";
+import { PrintControls } from "@/components/layout/print-controls";
 import { AssetTag } from "@/features/assets/asset-tag";
 import type { AssetLabelDto } from "@/lib/services/assets";
 
@@ -138,7 +138,6 @@ export function AssetLabelSheet({
                   assetNumber={asset.assetId}
                   device={asset.device}
                   position={asset.position}
-                  positionTotal={asset.positionTotal}
                   serialNumber={asset.serialNumber ?? ""}
                   // Same override the single-label page passes. Left to its
                   // default the batch would print a different word in the red
@@ -152,7 +151,7 @@ export function AssetLabelSheet({
       </div>
 
       {/* On screen this is the toolbar that opens the print dialog. */}
-      <PrintTrigger />
+      <PrintControls label={`Print ${pages.length} ${pages.length === 1 ? "sheet" : "sheets"}`} />
     </>
   );
 }

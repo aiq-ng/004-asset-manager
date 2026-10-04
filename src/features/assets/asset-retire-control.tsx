@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Archive } from "lucide-react";
 
 import { retireAssetAction } from "@/features/assets/actions";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
 /**
@@ -59,7 +59,7 @@ export function AssetRetireControl({
             disabled={assigned}
             title={assigned ? "Return the asset before retiring it" : undefined}
           >
-            <Icons.Archive className="size-3.5" />
+            <Archive className="size-3.5" />
             Retire asset
           </Button>
         </div>

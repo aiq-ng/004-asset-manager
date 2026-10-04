@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 
 import Link from "next/link";
+import { Mail, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
@@ -104,7 +104,7 @@ async function StaffResults({
     return (
       <Card>
         <EmptyState
-          icon={<Icons.Users className="size-5" />}
+          icon={<Users className="size-5" />}
           title={hasActiveFilters(current) ? "Nobody matches those filters" : "No staff yet"}
           description={
             hasActiveFilters(current)
@@ -144,7 +144,7 @@ async function StaffResults({
                     href={`mailto:${person.email}`}
                     className="flex items-center gap-c54-2 hover:underline"
                   >
-                    <Icons.Mail className="size-3.5 shrink-0 text-c54-text-muted" />
+                    <Mail className="size-3.5 shrink-0 text-c54-text-muted" />
                     <span className="truncate">{person.email}</span>
                   </a>
                 </TableCell>

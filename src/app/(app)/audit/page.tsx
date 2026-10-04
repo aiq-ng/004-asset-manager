@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { FilterBar } from "@/features/shared/filter-bar";
@@ -120,7 +120,7 @@ async function AuditResults({
     return (
       <Card>
         <EmptyState
-          icon={<Icons.Clipboard className="size-5" />}
+          icon={<ClipboardList className="size-5" />}
           title={
             hasActiveFilters(current)
               ? "No events match those filters"

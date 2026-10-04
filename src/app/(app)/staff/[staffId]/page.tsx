@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeChip } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 import { DescriptionList, DetailRow, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Breadcrumb,
@@ -65,7 +65,7 @@ export default async function StaffDetailPage({ params }: PageProps<"/staff/[sta
           <>
             <a href={`mailto:${staff.email}`}>
               <Button variant="outline" size="sm">
-                <Icons.Mail className="size-3.5" />
+                <Mail className="size-3.5" />
                 Email
               </Button>
             </a>

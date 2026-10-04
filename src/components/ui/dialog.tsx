@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
@@ -400,9 +401,7 @@ export function DialogCloseButton({
       className="-m-c54-2 shrink-0 rounded-c54-sm p-c54-2 text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary disabled:pointer-events-none disabled:opacity-45"
       aria-label="Close dialog"
     >
-      <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-        <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
-      </svg>
+      <X aria-hidden="true" className="size-4" />
     </button>
   );
 }

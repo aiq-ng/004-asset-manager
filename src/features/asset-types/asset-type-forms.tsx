@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus } from "lucide-react";
 
 import { createAssetTypeAction, updateAssetTypeAction } from "@/features/asset-types/actions";
 import { Field } from "@/components/ui/field";
@@ -9,7 +10,6 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { Dialog, DialogCancelButton, DialogCloseOnSuccess } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
 import { formatAssetId } from "@/lib/services/asset-id";
 import { cn } from "@/lib/utils/cn";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
@@ -98,7 +98,7 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
         <>
           <DialogCancelButton />
           <SubmitButton form="asset-type-create-form" pendingLabel="Creating…" pending={pending}>
-            <Icons.Plus className="size-3.5" />
+            <Plus className="size-3.5" />
             Add type
           </SubmitButton>
         </>
@@ -168,7 +168,7 @@ export function AssetTypeCreateButton() {
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add type
       </Button>
       {open ? <AssetTypeCreateDialog onClose={close} /> : null}
@@ -261,7 +261,7 @@ export function AssetTypeRowActions({ assetType }: { assetType: AssetTypeRow }) 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Edit
       </Button>
       {open ? <AssetTypeEditDialog assetType={assetType} onClose={() => setOpen(false)} /> : null}

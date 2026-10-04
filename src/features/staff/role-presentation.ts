@@ -1,5 +1,6 @@
+import { Crown, Info, ShieldCheck, User, UserPen } from "lucide-react";
+
 import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 import { STAFF_ROLES } from "@/lib/validators/staff";
 
 /**
@@ -27,7 +28,7 @@ const PRESENTATION: Record<
   USER: {
     label: "User",
     tone: "neutral",
-    icon: Icons.User,
+    icon: User,
     summary: "Can sign in and see the register. Cannot assign or manage assets.",
   },
   ASSIGNER: {
@@ -35,13 +36,13 @@ const PRESENTATION: Record<
     tone: "info",
     // The same glyph as an assigned asset, deliberately: both are about the
     // act of handing something to somebody.
-    icon: Icons.UserPen,
+    icon: UserPen,
     summary: "Can assign and return assets, and change an asset's status.",
   },
   ADMIN: {
     label: "Admin",
     tone: "accent",
-    icon: Icons.Shield,
+    icon: ShieldCheck,
     summary: "Everything an assigner can do, plus registering, editing and retiring assets.",
   },
   SUPERADMIN: {
@@ -49,7 +50,7 @@ const PRESENTATION: Record<
     tone: "inverse",
     // A crown rather than a second shield: the two roles are adjacent on the
     // ladder and a shield each would not say which one is higher.
-    icon: Icons.Crown,
+    icon: Crown,
     summary: "Full access, including staff, asset types and the audit log.",
   },
 };
@@ -61,7 +62,7 @@ export function rolePresentation(role: string): {
   summary: string;
 } {
   return (
-    PRESENTATION[role as StaffRole] ?? { label: role, tone: "neutral", icon: Icons.Info, summary: "" }
+    PRESENTATION[role as StaffRole] ?? { label: role, tone: "neutral", icon: Info, summary: "" }
   );
 }
 

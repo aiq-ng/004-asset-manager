@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ReturnButton } from "@/features/assignments/return-button";
 import { StatusBadge } from "@/features/assets/asset-table";
@@ -163,7 +163,7 @@ export function AssignmentEmptyState({ filtered }: { filtered: boolean }) {
   return (
     <Card>
       <EmptyState
-        icon={<Icons.Clipboard className="size-5" />}
+        icon={<ClipboardList className="size-5" />}
         title={filtered ? "No assignments match those filters" : "Nothing has been assigned yet"}
         description={
           filtered

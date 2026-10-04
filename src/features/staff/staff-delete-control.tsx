@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Trash } from "lucide-react";
 
 import { deleteStaffAction } from "@/features/staff/actions";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
 /**
@@ -70,7 +70,7 @@ export function StaffDeleteControl({
             onClick={() => setOpen(true)}
             disabled={blocked}
           >
-            <Icons.Trash className="size-3.5" />
+            <Trash className="size-3.5" />
             Delete account
           </Button>
         </div>

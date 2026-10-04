@@ -1,5 +1,6 @@
+import { Archive, ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Grid2x2, Image, Info, LockKeyhole, LogIn, LogOut, Pencil, ShieldCheck, Trash, Upload, UserPlus } from "lucide-react";
+
 import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 
 /**
  * Presentation for audit actions and entity types.
@@ -23,39 +24,39 @@ interface ActionPresentation {
 }
 
 const ACTIONS: Record<string, ActionPresentation> = {
-  LOGIN_SUCCEEDED: { label: "Sign in", group: "auth", tone: "neutral", icon: Icons.LogIn },
-  LOGIN_FAILED: { label: "Sign in failed", group: "security", tone: "danger", icon: Icons.CircleAlert },
-  LOGOUT: { label: "Sign out", group: "auth", tone: "neutral", icon: Icons.Logout },
-  PASSWORD_CHANGED: { label: "Password changed", group: "security", tone: "warning", icon: Icons.Lock },
+  LOGIN_SUCCEEDED: { label: "Sign in", group: "auth", tone: "neutral", icon: LogIn },
+  LOGIN_FAILED: { label: "Sign in failed", group: "security", tone: "danger", icon: CircleAlert },
+  LOGOUT: { label: "Sign out", group: "auth", tone: "neutral", icon: LogOut },
+  PASSWORD_CHANGED: { label: "Password changed", group: "security", tone: "warning", icon: LockKeyhole },
 
-  ASSET_CREATED: { label: "Asset registered", group: "asset", tone: "success", icon: Icons.CircleCheck },
-  ASSET_UPDATED: { label: "Asset updated", group: "asset", tone: "info", icon: Icons.Edit },
-  ASSET_RETIRED: { label: "Asset retired", group: "asset", tone: "warning", icon: Icons.Archive },
-  ASSET_IMAGE_UPLOADED: { label: "Image uploaded", group: "asset", tone: "neutral", icon: Icons.Upload },
-  ASSET_IMAGE_REMOVED: { label: "Image removed", group: "asset", tone: "neutral", icon: Icons.Image },
+  ASSET_CREATED: { label: "Asset registered", group: "asset", tone: "success", icon: CircleCheck },
+  ASSET_UPDATED: { label: "Asset updated", group: "asset", tone: "info", icon: Pencil },
+  ASSET_RETIRED: { label: "Asset retired", group: "asset", tone: "warning", icon: Archive },
+  ASSET_IMAGE_UPLOADED: { label: "Image uploaded", group: "asset", tone: "neutral", icon: Upload },
+  ASSET_IMAGE_REMOVED: { label: "Image removed", group: "asset", tone: "neutral", icon: Image },
 
-  ASSET_TYPE_CREATED: { label: "Type created", group: "asset", tone: "success", icon: Icons.Grid },
-  ASSET_TYPE_UPDATED: { label: "Type updated", group: "asset", tone: "info", icon: Icons.Edit },
+  ASSET_TYPE_CREATED: { label: "Type created", group: "asset", tone: "success", icon: Grid2x2 },
+  ASSET_TYPE_UPDATED: { label: "Type updated", group: "asset", tone: "info", icon: Pencil },
 
-  STAFF_CREATED: { label: "Staff created", group: "staff", tone: "success", icon: Icons.UserPlus },
-  STAFF_UPDATED: { label: "Staff updated", group: "staff", tone: "info", icon: Icons.Edit },
+  STAFF_CREATED: { label: "Staff created", group: "staff", tone: "success", icon: UserPlus },
+  STAFF_UPDATED: { label: "Staff updated", group: "staff", tone: "info", icon: Pencil },
   // A privilege change is the row an investigation starts from, so it gets its
   // own emphasis rather than being folded into "Staff updated".
-  STAFF_ROLE_CHANGED: { label: "Role changed", group: "security", tone: "accent", icon: Icons.Shield },
-  STAFF_PASSWORD_RESET: { label: "Password reset", group: "security", tone: "warning", icon: Icons.Lock },
-  STAFF_DELETED: { label: "Staff deleted", group: "staff", tone: "danger", icon: Icons.Trash },
+  STAFF_ROLE_CHANGED: { label: "Role changed", group: "security", tone: "accent", icon: ShieldCheck },
+  STAFF_PASSWORD_RESET: { label: "Password reset", group: "security", tone: "warning", icon: LockKeyhole },
+  STAFF_DELETED: { label: "Staff deleted", group: "staff", tone: "danger", icon: Trash },
 
-  ASSIGNMENT_CREATED: { label: "Assigned", group: "assignment", tone: "info", icon: Icons.ArrowRight },
-  ASSIGNMENT_RETURNED: { label: "Returned", group: "assignment", tone: "neutral", icon: Icons.ArrowLeft },
+  ASSIGNMENT_CREATED: { label: "Assigned", group: "assignment", tone: "info", icon: ArrowRight },
+  ASSIGNMENT_RETURNED: { label: "Returned", group: "assignment", tone: "neutral", icon: ArrowLeft },
 
-  AUTHORIZATION_DENIED: { label: "Access denied", group: "security", tone: "danger", icon: Icons.CircleAlert },
+  AUTHORIZATION_DENIED: { label: "Access denied", group: "security", tone: "danger", icon: CircleAlert },
 };
 
 const FALLBACK: ActionPresentation = {
   label: "",
   group: "asset",
   tone: "neutral",
-  icon: Icons.Info,
+  icon: Info,
 };
 
 export function actionPresentation(action: string): ActionPresentation {

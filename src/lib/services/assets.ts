@@ -122,6 +122,87 @@ export async function getAsset(idOrAssetId: string): Promise<AssetDetailDto> {
   return toAssetDetailDto(asset, await signImage(asset.imageKey));
 }
 
+/**
+ * What an unauthenticated visitor may read from a scanned tag.
+ *
+ * A narrower DTO than `AssetDetailDto` on purpose. The QR on a printed label is
+ * a public URL, so anything this shape carries is readable by anyone who has
+ * the tag — which rules out the assignment history, the return photos, and the
+ * database id that the internal detail page shows. The current holder's name and
+ * department are included deliberately: "is this the laptop I signed for" is the
+ * question a scan is actually asking, and the register is not a secret.
+ */
+export interface PublicAssetDto {
+  assetId: string;
+  description: string;
+  brand: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  status: string;
+  imageUrl: string | null;
+  assetType: { name: string; code: string };
+  /** Current holder, or null when the asset is not out. */
+  assignedTo: { name: string; department: string } | null;
+  createdAt: string;
+}
+
+/**
+ * Public read for the tag's QR destination, with no session required.
+ *
+ * Selects its own columns rather than calling `getAsset` and dropping fields:
+ * the detail query pulls every assignment row with three staff joins each, and
+ * throwing that away afterwards would still have read it from the database. This
+ * asks for the eight fields the card shows and nothing else.
+ *
+ * Resolves the identifier the same way `getAsset` does, so a scanned
+ * `IT-LAP-0001` and a clicked cuid both work.
+ */
+export async function getPublicAsset(
+  idOrAssetId: string,
+): Promise<PublicAssetDto | null> {
+  const asset = await prisma.asset.findUnique({
+    where: toAssetWhere(idOrAssetId),
+    select: {
+      assetId: true,
+      description: true,
+      brand: true,
+      model: true,
+      serialNumber: true,
+      status: true,
+      imageKey: true,
+      createdAt: true,
+      assetType: { select: { name: true, code: true } },
+      assignments: {
+        where: { dateReturned: null },
+        orderBy: { dateAssigned: "desc" },
+        take: 1,
+        select: {
+          staff: { select: { name: true, department: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+
+  if (!asset) return null;
+
+  const holder = asset.assignments[0]?.staff ?? null;
+
+  return {
+    assetId: asset.assetId,
+    description: asset.description,
+    brand: asset.brand,
+    model: asset.model,
+    serialNumber: asset.serialNumber,
+    status: asset.status,
+    imageUrl: await signImage(asset.imageKey),
+    assetType: asset.assetType,
+    assignedTo: holder
+      ? { name: holder.name, department: holder.department.name }
+      : null,
+    createdAt: asset.createdAt.toISOString(),
+  };
+}
+
 /** One serial that could not be registered, and why. */
 export interface SkippedAsset {
   serial: string;
@@ -547,8 +628,6 @@ export interface AssetLabelDto {
    * so there is no "six of these" for it to be confused with.
    */
   position: number;
-  /** Assets of this type on the register — the denominator in `01 of 20`. */
-  positionTotal: number;
   serialNumber: string | null;
 }
 
@@ -583,8 +662,14 @@ export async function listAssetsForLabels(
 
   // Positions come from the register's own ordering rather than from any column
   // on the asset, so the numbers are right without anyone having to maintain
-  // them. One ordered read per type covers both the totals and the ranks, which
-  // keeps a hundred labels at two queries instead of a hundred.
+  // them. One ordered read covers every requested type at once, which keeps a
+  // hundred labels at two queries instead of a hundred.
+  //
+  // Only the rank is counted, not the size of the fleet. The total used to ride
+  // along so the tag could print `01 of 20`, and it was the wrong number to put
+  // on a physical label: it counts the register as it stands today, so every tag
+  // printed before the next laptop was registered was already out of date. See
+  // `formatUnit`.
   const typeIds = [...new Set(rows.map((row) => row.assetTypeId))];
   const fleet =
     typeIds.length === 0
@@ -595,17 +680,12 @@ export async function listAssetsForLabels(
           orderBy: { assetId: "asc" },
         });
 
-  const totals = new Map<string, number>();
-  for (const row of fleet) {
-    totals.set(row.assetTypeId, (totals.get(row.assetTypeId) ?? 0) + 1);
-  }
-
   const seen = new Map<string, number>();
-  const rank = new Map<string, { position: number; total: number }>();
+  const rank = new Map<string, number>();
   for (const row of fleet) {
     const position = (seen.get(row.assetTypeId) ?? 0) + 1;
     seen.set(row.assetTypeId, position);
-    rank.set(row.assetId, { position, total: totals.get(row.assetTypeId) ?? 1 });
+    rank.set(row.assetId, position);
   }
 
   const byNumber = new Map(rows.map((row) => [row.assetId, row]));
@@ -618,8 +698,7 @@ export async function listAssetsForLabels(
       {
         assetId: row.assetId,
         device: row.assetType.name,
-        position: rank.get(row.assetId)?.position ?? 1,
-        positionTotal: rank.get(row.assetId)?.total ?? 1,
+        position: rank.get(row.assetId) ?? 1,
         serialNumber: row.serialNumber,
       },
     ];

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { ToggleLeft, ToggleRight } from "lucide-react";
+import { ShieldCheck, User } from "lucide-react";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog } from "@/components/ui/dialog";
 import { DescriptionList, DetailRow } from "@/components/ui/table";
-import { Icons } from "@/components/ui/icons";
 import { StaffRoleBadge } from "@/features/staff/staff-role-badge";
 import { rolePresentation } from "@/features/staff/role-presentation";
 import { ChangePasswordForm } from "@/features/settings/change-password-form";
@@ -57,7 +57,7 @@ export function SidebarUserSection({
                 }}
                 className="flex items-center gap-c54-3 rounded-c54-button px-c54-3 py-c54-2 text-left text-c54-sm text-c54-text-secondary transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary"
               >
-                <Icons.Shield className="size-4 text-c54-text-muted" />
+                <ShieldCheck className="size-4 text-c54-text-muted" />
                 Change password
               </button>
               <button
@@ -68,7 +68,7 @@ export function SidebarUserSection({
                 }}
                 className="flex items-center gap-c54-3 rounded-c54-button px-c54-3 py-c54-2 text-left text-c54-sm text-c54-text-secondary transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary"
               >
-                <Icons.User className="size-4 text-c54-text-muted" />
+                <User className="size-4 text-c54-text-muted" />
                 Account details
               </button>
             </div>

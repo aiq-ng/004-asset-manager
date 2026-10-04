@@ -1,29 +1,24 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 import { buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
-import {
-  AssetLabelSheet,
-  DEFAULT_LABEL_SHEET_PRESET,
-  LABEL_SHEET_PRESETS,
-  labelSheetCapacity,
-  type LabelSheetPreset,
-} from "@/features/assets/asset-label-sheet";
+import { PrintControls } from "@/components/layout/print-controls";
+import { AssetTag } from "@/features/assets/asset-tag";
 import { listAssetsForLabels } from "@/lib/services/assets";
 import { requirePageActor } from "@/lib/server/guard";
+import { ExportJpegButton } from "@/components/ui/export-to-jpg";
 
 /**
- * Batch label sheet.
+ * Batch label run.
  *
- * The selection arrives as asset numbers in the query string rather than as a
- * session, because a label run has to survive the browser's own print pipeline:
- * the operator can preview, re-print, or reopen the exact same sheet tomorrow
- * without re-selecting anything. `ids` is also the natural unit here — it is what
- * gets engraved, and it stays valid if the asset moves pages in the register.
- *
- * `preset` is read from the URL too, so switching layout does not silently change
- * which labels are in the run.
+ * One tag per printed page, in the order the ids were selected, so "Save as PDF"
+ * produces a single file for the print vendor: page N is tag N. The selection
+ * arrives as asset numbers in the query string rather than as a session, because
+ * a label run has to survive the browser's own print pipeline: the operator can
+ * preview, re-print, or reopen the exact same run tomorrow without re-selecting
+ * anything. `ids` is also the natural unit here — it is what gets engraved, and
+ * it stays valid if the asset moves pages in the register.
  */
 export default async function AssetLabelsPage({
   searchParams,
@@ -38,7 +33,6 @@ export default async function AssetLabelsPage({
     .map((id) => id.trim())
     .filter(Boolean);
 
-  const preset = parsePreset(params.preset);
   const assets = await listAssetsForLabels(ids);
 
   if (assets.length === 0) {
@@ -49,13 +43,13 @@ export default async function AssetLabelsPage({
             href="/assets"
             className="inline-flex items-center gap-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:text-c54-text-primary"
           >
-            <Icons.ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4" />
             Back to assets
           </Link>
         </div>
         <EmptyState
           title="No labels to print"
-          description="Pick assets from the register and choose Print labels to build a sheet."
+          description="Pick assets from the register and choose Print labels to build a run."
           action={
             <Link href="/assets" className={buttonClassName("secondary", "md")}>
               Go to assets
@@ -66,58 +60,66 @@ export default async function AssetLabelsPage({
     );
   }
 
-  const capacity = labelSheetCapacity(preset);
   const dropped = ids.length - assets.length;
 
   return (
     <>
-      <div className="c54-no-print mb-c54-section flex flex-wrap items-center justify-between gap-c54-3">
+      <div className="c54-no-print mb-c54-section">
         <Link
           href="/assets"
           className="inline-flex items-center gap-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:text-c54-text-primary"
         >
-          <Icons.ArrowLeft className="size-4" />
+          <ArrowLeft className="size-4" />
           Back to assets
         </Link>
-
-        {/* The toggle is links rather than a form: both layouts print the same
-            labels, so there is nothing to submit, and a link makes each size
-            bookmarkable and back-button friendly. */}
-        <div className="flex items-center gap-c54-1">
-          <span className="text-c54-xs text-c54-text-muted">Layout</span>
-          {(Object.keys(LABEL_SHEET_PRESETS) as LabelSheetPreset[]).map((key) => (
-            <Link
-              key={key}
-              href={`/assets/labels?ids=${ids.join(",")}&preset=${key}`}
-              aria-current={key === preset ? "true" : undefined}
-              className={buttonClassName(key === preset ? "primary" : "secondary", "sm")}
-            >
-              {key === "safe" ? "Large" : "Compact"} · {labelSheetCapacity(key)}
-            </Link>
-          ))}
-        </div>
       </div>
 
       {/*
-        Assets can go missing between selecting them and opening the sheet (a
+        Assets can go missing between selecting them and opening the run (a
         retirement, say). One vanished asset should not silently shorten the run.
       */}
       {dropped > 0 ? (
         <div className="c54-no-print mb-c54-section rounded-c54-card border border-c54-border-default bg-c54-warning-subtle px-c54-pad-lg py-c54-3 text-c54-sm text-c54-warning-text">
-          {dropped} selected {dropped === 1 ? "asset is" : "assets are"} no longer on the
-          register and {dropped === 1 ? "was" : "were"} left out. The remaining{" "}
-          {assets.length} will print.
+          {dropped} selected {dropped === 1 ? "asset is" : "assets are"} no
+          longer on the register and {dropped === 1 ? "was" : "were"} left out.
+          The remaining {assets.length} will print.
         </div>
       ) : null}
 
-      {assets.length > capacity ? (
-        <p className="c54-no-print mb-c54-section text-c54-sm text-c54-text-muted">
-          This is more than one sheet ({Math.ceil(assets.length / capacity)} pages). Print in
-          batches if your tray runs short.
-        </p>
-      ) : null}
+      <p className="c54-no-print mb-c54-section text-c54-sm text-c54-text-muted">
+        {assets.length} {assets.length === 1 ? "label" : "labels"}, one per
+        page. Save as PDF to send to the printer, and check the page count
+        matches.
+      </p>
 
-      <AssetLabelSheet assets={assets} preset={preset} />
+      <PrintControls label={`Print ${assets.length} ${assets.length === 1 ? "label" : "labels"}`} />
+      <ExportJpegButton
+        logoLabel="Nigeria"
+        assets={assets.map((a) => ({
+          assetId: a.assetId,
+          device: a.device,
+          position: a.position,
+          serialNumber: a.serialNumber ?? "",
+        }))}
+      />
+
+      {/* The tags must be direct siblings: the print stylesheet breaks the page
+          after every tag except the `:last-child`, and wrapping each one would
+          make every tag its own last child and remove every page break. On
+          screen they stack with a gap; in print the wrapper is a plain block so
+          nothing sits between pages. */}
+      <div className="flex flex-col gap-c54-4 print:block">
+        {assets.map((asset) => (
+          <AssetTag
+            key={asset.assetId}
+            logoLabel="Nigeria"
+            assetNumber={asset.assetId}
+            device={asset.device}
+            position={asset.position}
+            serialNumber={asset.serialNumber ?? ""}
+          />
+        ))}
+      </div>
     </>
   );
 }
@@ -125,9 +127,4 @@ export default async function AssetLabelsPage({
 /** A repeated query key arrives as an array; only the first value is meaningful. */
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
-function parsePreset(value: string | string[] | undefined): LabelSheetPreset {
-  const raw = firstParam(value);
-  return raw === "compact" || raw === "safe" ? raw : DEFAULT_LABEL_SHEET_PRESET;
 }

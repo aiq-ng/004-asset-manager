@@ -1,4 +1,5 @@
 import type { RefAttributes } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 
@@ -130,9 +131,5 @@ export function Checkbox({
 }
 
 export function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" className={cn("size-4", className)} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 6.5 8 10.5 12 6.5" />
-    </svg>
-  );
+  return <ChevronDown aria-hidden="true" className={cn("size-4", className)} />;
 }

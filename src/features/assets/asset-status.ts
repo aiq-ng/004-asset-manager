@@ -1,5 +1,6 @@
+import { Archive, CircleCheck, Info, UserPen, Wrench } from "lucide-react";
+
 import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 
 /**
  * Presentation mapping for the backend's `Asset.status`.
@@ -22,7 +23,7 @@ const PRESENTATION: Record<
   AVAILABLE: {
     label: "Available",
     tone: "success",
-    icon: Icons.CircleCheck,
+    icon: CircleCheck,
     hint: "In stock and ready to hand out",
   },
   ASSIGNED: {
@@ -30,19 +31,19 @@ const PRESENTATION: Record<
     tone: "info",
     // A person signing for it, not a box: what distinguishes this status from
     // every other one is that it is *someone's* right now.
-    icon: Icons.UserPen,
+    icon: UserPen,
     hint: "Currently held by a member of staff",
   },
   UNDER_REPAIR: {
     label: "Under repair",
     tone: "warning",
-    icon: Icons.Wrench,
+    icon: Wrench,
     hint: "Out of service pending a repair",
   },
   RETIRED: {
     label: "Retired",
     tone: "neutral",
-    icon: Icons.Archive,
+    icon: Archive,
     hint: "Permanently withdrawn from the register",
   },
 };
@@ -57,7 +58,7 @@ export function statusPresentation(status: string): {
     PRESENTATION[status as AssetStatus] ?? {
       label: status,
       tone: "neutral",
-      icon: Icons.Info,
+      icon: Info,
       hint: "",
     }
   );

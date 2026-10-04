@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { ChevronRight, Inbox } from "lucide-react";
 
 import { Badge, CodeChip } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { Skeleton } from "@/components/ui/feedback";
 import { statusPresentation } from "@/features/assets/asset-status";
 import { formatRelative } from "@/lib/utils/format";
@@ -89,13 +89,13 @@ export async function RecentAssetsSection({ items }: { items: Promise<{ items: R
           className="inline-flex items-center gap-c54-1 text-c54-xs font-c54-medium text-c54-text-accent hover:underline"
         >
           All assets
-          <Icons.ChevronRight className="size-3" />
+          <ChevronRight className="size-3" />
         </Link>
       </CardHeader>
 
       {assets.length === 0 ? (
         <EmptyState
-          icon={<Icons.Inbox className="size-5" />}
+          icon={<Inbox className="size-5" />}
           title="No assets yet"
           description="Once the first asset type exists, assets can be registered here."
         />
@@ -158,13 +158,13 @@ export async function RecentAssignmentsSection({
           className="inline-flex items-center gap-c54-1 text-c54-xs font-c54-medium text-c54-text-accent hover:underline"
         >
           All assignments
-          <Icons.ChevronRight className="size-3" />
+          <ChevronRight className="size-3" />
         </Link>
       </CardHeader>
 
       {assignments.length === 0 ? (
         <EmptyState
-          icon={<Icons.Inbox className="size-5" />}
+          icon={<Inbox className="size-5" />}
           title="Nothing handed over yet"
           description="Assignments will appear here as soon as assets are signed out."
         />

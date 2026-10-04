@@ -1,5 +1,7 @@
 "use client";
 
+import { Moon, Settings, Sun } from "lucide-react";
+
 import { changePasswordAction } from "@/features/settings/actions";
 import { ChangePasswordForm } from "@/features/settings/change-password-form";
 import {
@@ -8,7 +10,6 @@ import {
   type ThemePreference,
 } from "@/components/providers/theme-mode-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils/cn";
 
 const MODES: { value: ThemePreference; label: string; hint: string }[] = [
@@ -89,11 +90,11 @@ function AppearanceCard() {
                   )}
                 >
                   {option.value === "light" ? (
-                    <Icons.Sun className="size-4" />
+                    <Sun className="size-4" />
                   ) : option.value === "dark" ? (
-                    <Icons.Moon className="size-4" />
+                    <Moon className="size-4" />
                   ) : (
-                    <Icons.Settings className="size-4" />
+                    <Settings className="size-4" />
                   )}
                 </span>
                 <span className="text-c54-2xs font-c54-medium text-c54-text-primary">

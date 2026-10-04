@@ -561,6 +561,15 @@ Errors: `404`, `422` when the asset has no image.
 
 The QR encodes `{APP_URL}/assets/{assetId}` and is generated on demand — nothing is written to object storage.
 
+That page is the one route readable without a session: the QR is printed on a
+physical tag, so the person holding the device has no cookie to send. An
+anonymous visitor with a valid asset number gets a read-only card — description,
+status, type, brand, model, serial, registered date and the current holder's name
+and department. No history, no return notes or photos, no database id, no
+controls, and no app chrome. An unknown number is a `404`. A signed-in visitor
+gets the full authenticated detail page instead, and an invited session that still
+owes a password change is sent to `/change-password` before either.
+
 ```bash
 curl -b cookies.txt http://localhost:3000/api/assets/IT-LAP-0001/qr --output qr.png
 curl -b cookies.txt 'http://localhost:3000/api/assets/IT-LAP-0001/qr?format=svg'

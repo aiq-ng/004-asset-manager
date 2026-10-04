@@ -1,9 +1,9 @@
 import { Suspense } from "react";
+import { Building } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -50,7 +50,7 @@ async function DepartmentResults({ canManage }: { canManage: boolean }) {
     return (
       <Card>
         <EmptyState
-          icon={<Icons.Building className="size-5" />}
+          icon={<Building className="size-5" />}
           title="No departments yet"
           description={
             canManage
@@ -77,7 +77,7 @@ async function DepartmentResults({ canManage }: { canManage: boolean }) {
             <TableRow key={department.id}>
               <TableCell>
                 <span className="flex items-center gap-c54-2">
-                  <Icons.Building className="size-3.5 shrink-0 text-c54-text-muted" />
+                  <Building className="size-3.5 shrink-0 text-c54-text-muted" />
                   <span className="text-c54-sm font-c54-medium">{department.name}</span>
                 </span>
               </TableCell>

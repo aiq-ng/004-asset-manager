@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
+import { Upload } from "lucide-react";
 
 import { returnAssetAction } from "@/features/assets/actions";
 import { Dialog, DialogCancelButton, DialogCloseOnSuccess } from "@/components/ui/dialog";
@@ -9,7 +10,6 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { useRetainedFile } from "@/features/shared/use-retained-file";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
@@ -154,7 +154,7 @@ export function ReturnAssetDialog({
             htmlFor="return-photo"
             className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
           >
-            <Icons.Upload className="size-3.5" />
+            <Upload className="size-3.5" />
             {photo.name ?? "Choose an image (optional)"}
             <input
               {...photo.inputProps}

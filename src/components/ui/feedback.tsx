@@ -1,3 +1,5 @@
+import { CircleX, Info, TriangleAlert } from "lucide-react";
+
 import { cn } from "@/lib/utils/cn";
 
 export function Skeleton({ className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
@@ -92,30 +94,13 @@ export function Alert({
 }
 
 function InfoIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <circle cx="8" cy="8" r="6.5" />
-      <path d="M8 7.25v4" strokeLinecap="round" />
-      <circle cx="8" cy="4.9" r="0.85" fill="currentColor" stroke="none" />
-    </svg>
-  );
+  return <Info aria-hidden="true" className="size-4" />;
 }
 
 function WarnIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round">
-      <path d="M8 2.2 14.5 13.3H1.5L8 2.2Z" />
-      <path d="M8 6.6v2.8" strokeLinecap="round" />
-      <circle cx="8" cy="11.4" r="0.8" fill="currentColor" stroke="none" />
-    </svg>
-  );
+  return <TriangleAlert aria-hidden="true" className="size-4" />;
 }
 
 function ErrorIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <circle cx="8" cy="8" r="6.5" />
-      <path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5" strokeLinecap="round" />
-    </svg>
-  );
+  return <CircleX aria-hidden="true" className="size-4" />;
 }

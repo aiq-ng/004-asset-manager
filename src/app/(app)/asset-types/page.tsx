@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { Tag } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { CodeChip } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -39,7 +39,7 @@ export default async function AssetTypesPage() {
         {types.length === 0 ? (
           <Card>
             <EmptyState
-              icon={<Icons.Tag className="size-5" />}
+              icon={<Tag className="size-5" />}
               title="No asset types yet"
               description="An asset type gives each asset its id prefix, so at least one is needed before anything can be registered."
             />

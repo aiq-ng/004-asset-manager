@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { QrCode } from "lucide-react";
 
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/controls";
-import { Icons } from "@/components/ui/icons";
 
 /**
  * Asset selection for bulk actions.
@@ -153,7 +153,7 @@ export function LabelPrintBar() {
         </p>
 
         <Link href={`/assets/labels?ids=${ids.join(",")}`} className={buttonClassName("primary", "sm")}>
-          <Icons.Qr className="size-3.5" />
+          <QrCode className="size-3.5" />
           Print labels
         </Link>
 

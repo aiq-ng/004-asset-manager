@@ -2,10 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  ArrowLeftRight,
+  Building,
+  FileText,
+  Layers,
+  LayoutDashboard,
+  Package,
+  Users,
+} from "lucide-react";
 
-import { NavIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils/cn";
-import type { NavItem } from "@/lib/nav";
+import type { NavIcon, NavItem } from "@/lib/nav";
+
+/**
+ * Nav key to lucide component.
+ *
+ * The keys stay strings rather than holding the components themselves, because
+ * `lib/nav.ts` is imported by server components that must not pull an icon
+ * library into their bundle — the mapping is what turns a key into a glyph, and
+ * it lives here in the one client component that draws them.
+ */
+const NAV_GLYPHS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
+  dashboard: LayoutDashboard,
+  box: Package,
+  swap: ArrowLeftRight,
+  layers: Layers,
+  users: Users,
+  building: Building,
+  audit: FileText,
+};
 
 /**
  * Sidebar navigation.
@@ -21,6 +47,7 @@ export function SidebarNav({ items, onNavigate }: { items: NavItem[]; onNavigate
     <nav aria-label="Main" className="flex flex-col gap-c54-1 p-c54-3">
       {items.map((item) => {
         const active = item.exact ? pathname === item.href : isActive(pathname, item.href);
+        const Glyph = NAV_GLYPHS[item.icon];
 
         return (
           <Link
@@ -44,7 +71,13 @@ export function SidebarNav({ items, onNavigate }: { items: NavItem[]; onNavigate
                 active ? "bg-c54-text-accent" : "bg-transparent group-hover:bg-c54-chrome-fg/30",
               )}
             />
-            <NavIcon name={item.icon} className={cn(active ? "text-c54-text-accent" : "text-c54-chrome-fg/60")} />
+            <Glyph
+              aria-hidden="true"
+              className={cn(
+                "size-4 shrink-0",
+                active ? "text-c54-text-accent" : "text-c54-chrome-fg/60",
+              )}
+            />
             <span className="min-w-0">
               <span className="block truncate text-c54-sm font-c54-medium">{item.label}</span>
             </span>

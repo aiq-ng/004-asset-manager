@@ -77,6 +77,15 @@ JWT only carries `sub` and `sv`).
 
 See `docs/API.md` for per-endpoint RBAC and response shapes. Example request flows are in `api.http`.
 
+**The one public page:** `/assets/[assetId]` — the URL encoded in the QR code on a
+printed asset tag. A tag is read by whoever is holding the device, who has no
+session cookie, so this route sits outside the authenticated route group and
+answers an anonymous request with a read-only card (description, status, type,
+brand, model, serial, registered date, current holder). It carries no history, no
+return notes or photos, no database id, and no controls. An unknown asset number
+is a `404`; a signed-in visitor gets the full detail page instead. Every other
+page, and every API endpoint, still requires a session.
+
 ## Superadmin bootstrap
 
 The app cannot be signed into until a SUPERADMIN exists, so every entry point checks for one and sends an unbootstrapped install to `/setup`, where the account is created in the browser. The `/setup` screen is **self-sealing**: once a superadmin exists it redirects away and its action refuses, so there is never a state where both the form and a working superadmin are live.

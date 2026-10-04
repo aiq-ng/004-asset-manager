@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
 import { ReturnAssetDialog } from "@/features/assignments/return-asset-dialog";
 
 /**
@@ -28,7 +28,7 @@ export function ReturnButton({
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Refresh className="size-3.5" />
+        <RefreshCw className="size-3.5" />
         <span className="sr-only sm:not-sr-only">Return</span>
       </Button>
 

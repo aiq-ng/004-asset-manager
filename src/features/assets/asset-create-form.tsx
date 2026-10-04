@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Plus, Upload } from "lucide-react";
 
 import { createAssetAction } from "@/features/assets/actions";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { Input } from "@/components/ui/controls";
 import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { useRetainedFile } from "@/features/shared/use-retained-file";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
@@ -193,7 +193,7 @@ function AssetCreateDialog({
             htmlFor="asset-photo"
             className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
           >
-            <Icons.Upload className="size-3.5" />
+            <Upload className="size-3.5" />
             {photo.name ?? "Choose an image (optional)"}
             <input
               {...photo.inputProps}
@@ -234,7 +234,7 @@ export function AssetCreateButton({ assetTypes }: { assetTypes: AssetTypeOption[
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Register asset
       </Button>
       {open ? <AssetCreateDialog assetTypes={assetTypes} onClose={() => setOpen(false)} /> : null}

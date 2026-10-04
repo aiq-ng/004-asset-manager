@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Printer, QrCode } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeChip } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 import { DescriptionList, DetailRow } from "@/components/ui/table";
 import {
   Breadcrumb,
@@ -21,19 +21,29 @@ import { AssignmentHistory, AssignmentPanel } from "@/features/assets/assignment
 import { getAsset, signStorageUrl } from "@/lib/services/assets";
 import { listStaffOptions } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
-import { can } from "@/lib/auth/permissions";
-import { requirePageActor } from "@/lib/server/guard";
+import { can, type Actor } from "@/lib/auth/permissions";
 
 /**
- * Asset detail.
+ * The signed-in half of the asset detail page.
+ *
+ * Split out of the route component so `/assets/[assetId]` can serve both a
+ * session and a bare QR scan: the route decides which of the two it is, and
+ * hands this one the actor it already resolved rather than having it look one up
+ * again. `getActor` is memoised per request, so the double lookup the guard used
+ * to do was free — but threading the actor through makes the "this branch
+ * requires a session" claim a property of the type signature rather than a
+ * convention.
  *
  * Resolves the identifier the same way the service and the QR endpoint do, so a
  * scanned `IT-LAP-0001` and a clicked cuid land on the same page.
  */
-export default async function AssetDetailPage({ params }: PageProps<"/assets/[assetId]">) {
-  const actor = await requirePageActor();
-  const { assetId } = await params;
-
+export async function AssetDetailView({
+  assetId,
+  actor,
+}: {
+  assetId: string;
+  actor: Actor;
+}) {
   let asset;
   try {
     asset = await getAsset(assetId);
@@ -97,13 +107,13 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
           <>
             <Link href={`/assets/${asset.assetId}/label`}>
               <Button variant="outline" size="sm">
-                <Icons.Printer className="size-3.5" />
+                <Printer className="size-3.5" />
                 Print label
               </Button>
             </Link>
             <a href={`/api/assets/${asset.assetId}/qr`} target="_blank" rel="noreferrer">
               <Button variant="outline" size="sm">
-                <Icons.Qr className="size-3.5" />
+                <QrCode className="size-3.5" />
                 QR code
               </Button>
             </a>

@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { Inbox } from "lucide-react";
 
 import { Badge, CodeChip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { statusPresentation } from "@/features/assets/asset-status";
 import { AssetRowActions } from "@/features/assets/asset-row-actions";
@@ -185,7 +185,7 @@ export function AssetEmptyState({ filtered }: { filtered: boolean }) {
   return (
     <Card>
       <EmptyState
-        icon={<Icons.Inbox className="size-5" />}
+        icon={<Inbox className="size-5" />}
         title={filtered ? "No assets match those filters" : "No assets registered yet"}
         description={
           filtered

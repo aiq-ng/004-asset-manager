@@ -2,10 +2,10 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EntitySelect } from "@/components/ui/entity-select";
-import { Icons } from "@/components/ui/icons";
 import { buildQuery } from "@/lib/utils/search-params";
 
 export interface FilterOption {
@@ -103,7 +103,7 @@ export function FilterBar({
           {placeholder}
         </label>
         <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center text-c54-text-muted">
-          <Icons.Search />
+          <Search />
         </span>
         {/* Left padding is a plain `pl-9` on purpose: the token package ships
             no `--c54-space-9`, so a `pl-c54-9` here would silently not compile
@@ -155,7 +155,7 @@ export function FilterBar({
       {activeCount > 0 ? (
         <Button variant="ghost" onClick={() => router.push(pathname, { scroll: false })}>
           Clear
-          <Icons.Close className="size-3.5" />
+          <X className="size-3.5" />
         </Button>
       ) : null}
     </div>

@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils/cn";
 export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger" | "info" | "inverse";
 
 /**
- * A glyph from the `Icons` set. Typed structurally rather than as the concrete
- * component so a caller can pass `Icons.Wrench` without this module importing
- * `icons.tsx` and the two drifting apart.
+ * A lucide icon component. Typed structurally rather than as lucide's own
+ * `LucideIcon` type so a caller can pass any icon component without this module
+ * importing the library and the two drifting apart.
  */
 export type BadgeIcon = React.ComponentType<{ className?: string }>;
 

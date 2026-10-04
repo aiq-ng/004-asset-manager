@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus, Trash } from "lucide-react";
 
 import {
   createDepartmentAction,
@@ -13,7 +14,6 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
 /**
@@ -44,7 +44,7 @@ function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
           {/* `pending` is passed because this button is in the footer, outside the
               form below, where `useFormStatus` cannot see it. See `SubmitButton`. */}
           <SubmitButton form="department-create-form" pendingLabel="Adding…" pending={pending}>
-            <Icons.Plus className="size-3.5" />
+            <Plus className="size-3.5" />
             Add department
           </SubmitButton>
         </>
@@ -80,7 +80,7 @@ export function DepartmentCreateButton() {
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add department
       </Button>
       {open ? <DepartmentCreateDialog onClose={close} /> : null}
@@ -151,7 +151,7 @@ export function DepartmentRenameButton({ department }: { department: { id: strin
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Rename
       </Button>
       {open ? (
@@ -186,7 +186,7 @@ export function DepartmentDeleteControl({
         disabled={blocked}
         title={blocked ? `${department.name} still has staff in it` : undefined}
       >
-        <Icons.Trash className="size-3.5" />
+        <Trash className="size-3.5" />
         Delete
       </Button>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
+import { Check, ClipboardList, Printer, Upload } from "lucide-react";
 
 import {
   createBulkAssetEntryAction,
@@ -14,7 +15,6 @@ import { Input, Textarea } from "@/components/ui/controls";
 import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
 import { BULK_ASSET_ENTRY_MAX } from "@/lib/validators/asset";
@@ -522,7 +522,7 @@ function BulkAssetEntryDialog({
               htmlFor="bulk-asset-photo"
               className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
             >
-              <Icons.Upload className="size-3.5" />
+              <Upload className="size-3.5" />
               {batchPhotoName ?? "Choose a photo for the whole batch (optional)"}
               <input
                 id="bulk-asset-photo"
@@ -653,7 +653,7 @@ function BulkAssetEntryDialog({
                     <span className="w-c54-6 shrink-0 text-c54-2xs tabular-nums text-c54-text-muted">
                       {index + 1}
                     </span>
-                    <Icons.Check className="size-4 shrink-0 text-c54-text-success" />
+                    <Check className="size-4 shrink-0 text-c54-text-success" />
                     <Link
                       href={`/assets/${saved[String(index)]}`}
                       className="font-mono text-c54-xs hover:underline"
@@ -744,7 +744,7 @@ function BulkAssetEntryDialog({
             href={`/assets/labels?ids=${registeredIds.join(",")}`}
             className="inline-flex h-9 items-center justify-center gap-c54-2 rounded-c54-button bg-c54-action-primary px-c54-4 text-c54-sm font-c54-medium text-c54-text-inverted hover:bg-c54-action-primary-hover"
           >
-            <Icons.Printer className="size-4" />
+            <Printer className="size-4" />
             Print their labels
           </Link>
 
@@ -769,7 +769,7 @@ export function BulkAssetEntryButton({ assetTypes }: { assetTypes: AssetTypeOpti
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        <Icons.Clipboard className="size-3.5" />
+        <ClipboardList className="size-3.5" />
         Register in bulk
       </Button>
       {open ? (

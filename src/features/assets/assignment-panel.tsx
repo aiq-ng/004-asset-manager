@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { VerticalTimeline, VerticalTimelineElement } from "react-vertical-timeline-component";
+import { Plus, RefreshCw } from "lucide-react";
 import "react-vertical-timeline-component/style.min.css";
 
 import { AssignAssetDialog } from "@/features/assets/assign-asset-dialog";
@@ -9,7 +10,6 @@ import { ReturnAssetDialog } from "@/features/assignments/return-asset-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DescriptionList, DetailRow } from "@/components/ui/table";
-import { Icons } from "@/components/ui/icons";
 import type { StaffListOption } from "@/features/staff/types";
 
 /**
@@ -90,7 +90,7 @@ export function AssignmentPanel({
     canAssign && assetId && assetStatus === "AVAILABLE" && staff ? (
       <div>
         <Button size="sm" onClick={() => setAssignOpen(true)}>
-          <Icons.Plus className="size-3.5" />
+          <Plus className="size-3.5" />
           Assign to staff
         </Button>
         <AssignAssetDialog
@@ -201,7 +201,7 @@ export function AssignmentPanel({
                   })
                 }
               >
-                <Icons.Refresh className="size-3.5" />
+                <RefreshCw className="size-3.5" />
                 Record return
               </Button>
             </div>
@@ -272,7 +272,7 @@ export function AssignmentHistory({
                   : "bg-c54-bg-card text-c54-text-muted border border-c54-border-strong"
               }
               iconStyle={{ boxShadow: "0 0 0 4px var(--color-c54-bg-card)" }}
-              icon={active ? <Icons.Plus /> : <Icons.Refresh />}
+              icon={active ? <Plus /> : <RefreshCw />}
             >
               <p className="flex flex-wrap items-baseline gap-x-c54-2 text-c54-sm font-c54-medium text-c54-text-primary">
                 {entry.staff.name}

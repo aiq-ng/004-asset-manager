@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { VerticalTimeline, VerticalTimelineElement } from "react-vertical-timeline-component";
+import { Plus, RefreshCw } from "lucide-react";
 import "react-vertical-timeline-component/style.min.css";
 
 import { CodeChip } from "@/components/ui/badge";
-import { Icons } from "@/components/ui/icons";
 import { formatDate } from "@/lib/utils/format";
 
 type StaffHistoryEntry = {
@@ -57,7 +57,7 @@ export function StaffAssignmentHistory({ history }: { history: StaffHistoryEntry
                   : "bg-c54-bg-card text-c54-text-muted border border-c54-border-strong"
               }
               iconStyle={{ boxShadow: "0 0 0 4px var(--color-c54-bg-card)" }}
-              icon={out ? <Icons.Plus /> : <Icons.Refresh />}
+              icon={out ? <Plus /> : <RefreshCw />}
             >
               <div className="flex flex-wrap items-center gap-x-c54-2 gap-y-c54-1">
                 <Link href={`/assets/${entry.assetId}`} className="hover:underline">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus } from "lucide-react";
 
 import { createStaffAction, updateStaffAction } from "@/features/staff/actions";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,6 @@ import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { DepartmentSelect, type DepartmentOption } from "@/features/departments/department-select";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { ASSIGNABLE_ROLES, rolePresentation } from "@/features/staff/role-presentation";
@@ -51,7 +51,7 @@ function StaffCreateDialog({
         <>
           <DialogCancelButton />
           <SubmitButton form="staff-create-form" pendingLabel="Creating…" pending={pending}>
-            <Icons.Plus className="size-3.5" />
+            <Plus className="size-3.5" />
             Create account
           </SubmitButton>
         </>
@@ -179,7 +179,7 @@ export function StaffCreateButton({ departments }: { departments: DepartmentOpti
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add staff member
       </Button>
       {open ? (
@@ -379,7 +379,7 @@ export function StaffEditButton({
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Edit
       </Button>
       {open ? (

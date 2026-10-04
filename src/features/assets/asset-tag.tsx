@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 /**
  * Printed asset tag.
  *
@@ -22,29 +24,41 @@ type AssetTagProps = {
    * the tenth monitor. Printed in the `UNIT` row — see `formatUnit`.
    */
   position: number;
-  /** Assets of this type on the register; renders as `010 of 250`. */
-  positionTotal?: number;
   serialNumber?: string;
   /** Text of the red band under the logo mark. */
   logoLabel?: string;
+  /**
+   * Print bleed as any CSS length, e.g. `"3mm"`. The blue header and red footer
+   * extend this far past the trim edge so a die-cut that drifts by a millimetre
+   * never leaves a white sliver. Normally left unset: `globals.css` sets
+   * `--bleed` to 0mm on screen and to the print bleed inside `@media print`, so
+   * the number lives next to the `@page` size it has to agree with. An explicit
+   * value here overrides the stylesheet (inline style wins).
+   */
+  bleed?: string;
 };
 
 /**
- * Renders the `UNIT` row as a position within its type: `01 of 20`, `010 of 250`.
+ * Renders the `UNIT` row as a position within its type: `01`, `02`, ... `250`.
  *
- * The position is zero-padded to the *width of the total* rather than to a fixed
- * width, because that is the only version that stays aligned in a column. Padded
- * to a fixed three, a fleet of 20 prints `001 of 20` and `010 of 20`, where the
- * numbers are different lengths and the register looks ragged at exactly the
- * point where it is meant to be easiest to scan.
+ * **No denominator.** It used to print `01 of 20`, and that was a trap: the total
+ * is a live count of the register, so a label printed today reads `01 of 20` and
+ * is permanently wrong the moment the twenty-first laptop is registered. Nothing
+ * can be done about it afterwards — the label is on a device, and the drift is
+ * silent, because `01 of 25` still looks like a perfectly plausible label. An
+ * earlier run of labels would disagree with a later one about the same fleet.
  *
- * A lone asset of a type prints as a bare `1` rather than `01 of 1`: one entry is
- * far more likely to be a fleet not yet entered than a deliberately numbered
- * single, and `01 of 1` on the office's only router is noise.
+ * The position alone is safe to print, and not by luck: `reserveAssetId` is a
+ * monotonic per-type counter whose numbers are never reused, and retiring an
+ * asset is a soft delete, so no row ever leaves the type it was counted in. A
+ * given laptop's `UNIT` therefore cannot change after the label is stuck to it.
+ *
+ * Zero-padded to two digits so a column of tags keeps one width. Fixed padding,
+ * not padded to the width of some total — that is the same dependency on a
+ * moving number that this row just gave up.
  */
-export function formatUnit(position: number, total?: number): string {
-  if (!total || total < 2) return String(position);
-  return `${String(position).padStart(String(total).length, "0")} of ${total}`;
+export function formatUnit(position: number): string {
+  return String(position).padStart(2, "0");
 }
 
 function C54Logo() {
@@ -72,15 +86,23 @@ export function AssetTag({
   assetNumber,
   device,
   position,
-  positionTotal,
   serialNumber = "",
   logoLabel = "HABARI",
+  bleed,
 }: AssetTagProps) {
   return (
-    <div className="c54-asset-tag @container w-full max-w-[1280px]">
-      <div className="relative flex aspect-video w-full flex-col overflow-hidden bg-white text-c54-navy">
-        {/* Header */}
-        <header className="flex h-[15.9%] items-center justify-between bg-c54-blue px-[4.4cqw]">
+    <div
+      className="c54-asset-tag @container w-full max-w-[1280px]"
+      style={bleed ? ({ "--bleed": bleed } as CSSProperties) : undefined}
+    >
+      {/* No `overflow-hidden` here on purpose: the header and footer grow past
+          this box by `--bleed`, and clipping it would cut the bleed off. The
+          logo clips itself, so nothing else relied on it. */}
+      <div className="relative flex aspect-video w-full flex-col bg-white text-c54-navy">
+        {/* Header. The negative margins cancel the extra height and width the
+            bleed adds, so the body does not move; the matching padding keeps
+            the text where it was relative to the trim edge. */}
+        <header className="-mx-[var(--bleed)] -mt-[var(--bleed)] flex h-[calc(15.9%_+_var(--bleed))] items-center justify-between bg-c54-blue px-[calc(4.4cqw_+_var(--bleed))] pt-[var(--bleed)]">
           <h1 className="text-[3.8cqw] font-extrabold tracking-[-0.02em] text-white">
             C54 STREAMING DOME
           </h1>
@@ -110,7 +132,7 @@ export function AssetTag({
               <dd className="min-w-0 font-bold">{device}</dd>
 
               <dt className="whitespace-nowrap font-semibold tracking-wide text-c54-gray">UNIT</dt>
-              <dd className="min-w-0 font-bold">{formatUnit(position, positionTotal)}</dd>
+              <dd className="min-w-0 font-bold">{formatUnit(position)}</dd>
 
               <dt className="whitespace-nowrap font-semibold tracking-wide text-c54-gray">S/N</dt>
               {/* `min-h` rather than `h`: a long serial then grows the box and
@@ -124,8 +146,9 @@ export function AssetTag({
 
           <section className="flex w-[17.8cqw] shrink-0 flex-col items-center gap-[1cqw]">
             {/* The endpoint encodes `{APP_URL}/assets/{assetNumber}` — the same
-                URL the on-screen QR codes use, so scanners land on the detail
-                page whichever code they scan. */}
+                URL the on-screen QR codes use, so scanners land on the same page
+                whichever code they scan. That route is public: a scan opens a
+                read-only card for anyone holding the device, without a session. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/assets/${assetNumber}/qr?format=svg`}
@@ -138,8 +161,8 @@ export function AssetTag({
           </section>
         </main>
 
-        {/* Footer */}
-        <footer className="flex h-[13.2%] items-center justify-center bg-c54-red text-[2.6cqw] font-bold text-white">
+        {/* Footer: same bleed treatment as the header, growing downward. */}
+        <footer className="-mx-[var(--bleed)] -mb-[var(--bleed)] flex h-[calc(13.2%_+_var(--bleed))] items-center justify-center bg-c54-red pb-[var(--bleed)] text-[2.6cqw] font-bold text-white">
           PROPERTY OF C54NEWS CHANNEL LIMITED&nbsp;&nbsp;·&nbsp;&nbsp;DO NOT REMOVE
         </footer>
       </div>
