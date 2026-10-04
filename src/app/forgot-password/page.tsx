@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { ForgotPasswordForm } from "@/features/auth/forgot-password-form";
+import { superadminExists } from "@/lib/services/staff-bootstrap";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 /**
@@ -10,8 +12,15 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
  * mirrors the sign-in screen on purpose — same elevation, same hairline — so a
  * user bounced here from the sign-in form sees one continuous flow, not a
  * different product.
+ *
+ * Gated on the superadmin check for the same reason /login is. On an
+ * unbootstrapped install there is no account to send a reset to, so this form
+ * would accept an address, claim a link is on its way, and send nothing —
+ * a worse dead end than a redirect, because it looks like it worked.
  */
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  if (!(await superadminExists())) redirect("/setup");
+
   return (
     <div className="relative flex min-h-dvh flex-col bg-c54-bg-surface">
       <div className="flex items-center justify-end p-c54-pad">

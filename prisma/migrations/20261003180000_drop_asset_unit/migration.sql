@@ -1,0 +1,19 @@
+-- Drop `Asset.unit`.
+--
+-- The column recorded a quantity ("six of these") but nothing could act on it.
+-- `Assignment_one_active_per_asset` is a partial unique index on `assetId`, so a
+-- row holds as one indivisible thing: assign a six-unit row to somebody and all
+-- six went with it, and there was no way to hand out a subset. Meanwhile the
+-- assets list never showed the number, the printed label's UNIT row prints the
+-- asset's *position among assets of its type* rather than this column, and bulk
+-- register already refused the field and created one row per physical item.
+--
+-- One row is one physical item, which is what the serial number, the assignment
+-- index and the bulk flow already assume. Six identical monitors are six rows,
+-- each assignable to a different person.
+--
+-- Values are dropped rather than migrated. The quantity was never displayed or
+-- enforced anywhere, so there is nothing to preserve: the six monitors a row
+-- described are already individually identifiable by their own rows, or never
+-- existed as tracked objects.
+ALTER TABLE "Asset" DROP COLUMN "unit";

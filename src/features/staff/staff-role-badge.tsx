@@ -7,7 +7,7 @@ export function StaffRoleBadge({ role }: { role: string }) {
   const presentation = rolePresentation(role);
 
   return (
-    <Badge tone={presentation.tone} title={presentation.summary}>
+    <Badge tone={presentation.tone} icon={presentation.icon} title={presentation.summary}>
       {presentation.label}
     </Badge>
   );

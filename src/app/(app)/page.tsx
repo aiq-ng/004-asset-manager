@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { Badge, CodeChip } from "@/components/ui/badge";
+import { CodeChip } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
 import { Icons } from "@/components/ui/icons";
@@ -15,13 +15,7 @@ import {
   TotalsSkeleton,
 } from "@/features/dashboard/sections";
 import { assetTotals, getDashboardData } from "@/features/dashboard/queries";
-import {
-  RegisterAssetButtonFallback,
-  RegisterAssetTrigger,
-} from "@/features/assets/register-asset-trigger";
-import { listAssetTypes } from "@/lib/services/asset-types";
 import { requirePageActor } from "@/lib/server/guard";
-import { can } from "@/lib/auth/permissions";
 import { formatRelative } from "@/lib/utils/format";
 
 /**
@@ -61,20 +55,8 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        eyebrow={
-          <Badge tone="neutral" size="sm">
-            {actor.department}
-          </Badge>
-        }
         title={`${greetingFor(now)}, ${actor.name.split(" ")[0]}`}
         description="Stock levels, recent activity, and what is currently in your hands."
-        actions={
-          can(actor.role, "asset:manage") ? (
-            <Suspense fallback={<RegisterAssetButtonFallback />}>
-              <RegisterAssetTrigger assetTypes={listAssetTypes()} />
-            </Suspense>
-          ) : null
-        }
       />
 
       <div className="flex flex-col gap-c54-section">

@@ -344,4 +344,77 @@ export const Icons = {
     </>,
     "ArchiveIcon",
   ),
+
+  /* Status glyphs. A pill that states a fact about a record reads faster when
+     the glyph says what the fact is — a check for "available" is understood
+     without reading the word — and unlike a bare coloured dot it survives a
+     greyscale print and colour-blindness, where a dot is only hue. */
+
+  CircleCheck: glyph(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M5.2 8.2 7.2 10.2l3.6-4" />
+    </>,
+    "CircleCheckIcon",
+  ),
+  CircleAlert: glyph(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M8 4.2v4.2M8 10.9v.7" />
+    </>,
+    "CircleAlertIcon",
+  ),
+  /**
+   * A person with a pen, for "assigned".
+   *
+   * It was a person with a tick, which failed twice: the tick ran into the
+   * shoulder arc and filled the bottom of the glyph with one stroke, and a tick
+   * is already the whole meaning of "available" one row above it. The pen says
+   * the thing that actually happened — the asset was signed for by somebody —
+   * and it is drawn as an open shaft with a nib rather than an outline, so it
+   * stays a line at 12px and never fills in.
+   */
+  UserPen: glyph(
+    <>
+      <circle cx="5.2" cy="5" r="2.4" />
+      <path d="M1.6 13.6a3.7 3.7 0 0 1 5.3-3.3" />
+      <path d="M8.8 12.8 14 7.6" />
+      <path d="M8.8 12.8l1.6.6-.6-1.6" />
+    </>,
+    "UserPenIcon",
+  ),
+  UserPlus: glyph(
+    <>
+      <circle cx="5.8" cy="5.2" r="2.5" />
+      <path d="M1.8 13.8a4.4 4.4 0 0 1 8.8 0" />
+      <path d="M13.4 3.8v4M11.4 5.8h4" />
+    </>,
+    "UserPlusIcon",
+  ),
+  Crown: glyph(
+    <>
+      <path d="M1.8 12.4h12.4" />
+      <path d="M2.6 10.4 1.6 3.9l4 2.8L8 2.4l2.4 4.3 4-2.8-1 6.5H2.6Z" />
+    </>,
+    "CrownIcon",
+  ),
+  LogIn: glyph(
+    <>
+      <path d="M6.8 13.4H3.6a1 1 0 0 1-1-1V3.6a1 1 0 0 1 1-1h3.2" />
+      <path d="M9.8 10.6 13.4 8l-3.6-2.6M13.4 8H6.2" />
+    </>,
+    "LogInIcon",
+  ),
+  /**
+   * A padlock rather than a key. The obvious key drawing — a ring on a shaft
+   * with teeth — is a magnifying glass at 12px, and a "password changed" pill
+   * next to a search control is worse than no icon at all.
+   */
+  Lock: glyph(
+    <>
+      <rect x="3.4" y="7" width="9.2" height="6.8" rx="1.2" />
+      <path d="M5.6 7V5a2.4 2.4 0 0 1 4.8 0v2" />
+    </>,
+    "LockIcon",
+  ),
 } as const;

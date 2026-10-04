@@ -21,6 +21,7 @@ export function ChangePasswordForm({
   email,
   hasPassword,
   action = changePasswordModalAction,
+  closeOnSuccess = false,
 }: {
   email: string;
   /** An account created without a password may skip the current-password check. */
@@ -30,12 +31,22 @@ export function ChangePasswordForm({
    * variant; the modal uses the default, which closes itself on success.
    */
   action?: typeof changePasswordAction;
+  /**
+   * Whether this form sits inside a dialog that has to close when it succeeds.
+   *
+   * Stated rather than inferred from `action`, because the reason is structural:
+   * `DialogCloseOnSuccess` reads the surrounding dialog's context and throws
+   * outside one. Rendering it unconditionally meant the settings page — which
+   * shows the same form in a plain card, with no dialog around it — took the
+   * hook's error and rendered "This page couldn't load" instead of the page.
+   */
+  closeOnSuccess?: boolean;
 }) {
   const [state, formAction] = useActionState(action, INITIAL_ACTION_STATE);
 
   return (
     <form action={formAction} className="flex flex-col gap-c54-4">
-      <DialogCloseOnSuccess when={state.ok} />
+      {closeOnSuccess ? <DialogCloseOnSuccess when={state.ok} /> : null}
       {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
       <Field

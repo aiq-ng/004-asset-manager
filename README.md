@@ -26,13 +26,18 @@ The API needs Postgres, MinIO and Redis. All three are defined in
 `docker-compose.yml`:
 
 ```bash
-docker compose up -d      # postgres (5432) + minio (9000, console on 9001) + redis (6379)
+docker compose up -d      # postgres (5432) + minio (9000, console on 9001) + redis (6379) + audit worker
 cp .env.example .env      # if .env does not exist yet
 pnpm db:migrate           # apply prisma migrations (or: pnpm prisma:migrate)
 pnpm db:seed              # optional sample data
 pnpm dev                  # http://localhost:3000
-pnpm worker:audit         # audit worker, in a second terminal
 ```
+
+`docker compose up -d` starts the **audit worker** alongside the app, so the
+[audit trail](#audit-trail) is being written from the first request. Compose builds
+it from the Dockerfile's `worker` target and gives it a healthcheck that probes the
+heartbeat key, so `docker compose ps` shows whether it is actually draining.
+Prefer `pnpm dev` over building the `app` image for local work.
 
 Redis is only needed for the [audit trail](#audit-trail); without it the API runs
 normally but does not record audit events.
@@ -61,7 +66,7 @@ JWT only carries `sub` and `sv`).
 **Policies:**
 - Password minimum length: 12 characters.
 - `SESSION_SECRET` (env) must be at least 32 characters in production.
-- SUPERADMIN cannot be granted through the API; it is created via `pnpm auth:create-superadmin` (interactive or via flags/env). The CLI refuses to create one if a SUPERADMIN already exists.
+- SUPERADMIN cannot be granted through the staff API. It is created once, by the `/setup` screen or `pnpm auth:create-superadmin` (interactive or via flags/env); neither will run when one already exists, and a partial unique index makes a second impossible. Its password is reset with `pnpm auth:set-superadmin-password`, which revokes all outstanding sessions.
 - Staff accounts with `passwordHash` NULL cannot log in. The SUPERADMIN bootstrap sets an initial password.
 
 **Auth endpoints (public/protected):**
@@ -74,15 +79,35 @@ See `docs/API.md` for per-endpoint RBAC and response shapes. Example request flo
 
 ## Superadmin bootstrap
 
+The app cannot be signed into until a SUPERADMIN exists, so every entry point checks for one and sends an unbootstrapped install to `/setup`, where the account is created in the browser. The `/setup` screen is **self-sealing**: once a superadmin exists it redirects away and its action refuses, so there is never a state where both the form and a working superadmin are live.
+
 ```bash
-# Interactive (prompts for email/password)
+# Interactive (prompts for name/email/password)
 pnpm auth:create-superadmin
 
 # Non-interactive
 SUPERADMIN_EMAIL="ana.ribeiro@example.com" SUPERADMIN_PASSWORD="SuperSecretDev123!" pnpm auth:create-superadmin
 ```
 
-On a fresh DB, the CLI creates the SUPERADMIN. If any staff already exist, it promotes the oldest existing staff account to SUPERADMIN (and sets/updates their password). It never grants SUPERADMIN through the staff management API.
+The CLI is for containers, CI, and shell-only access; it calls the same service the setup screen does. It **only ever inserts** — it never promotes or modifies an existing account. (Earlier versions promoted the oldest staff row, which silently elevated a real person *and overwrote their password*; running it against a populated database was account takeover. If the supplied email already belongs to somebody, it says so and stops.)
+
+"At most one SUPERADMIN" is enforced by a partial unique index, `Staff_one_superadmin`, so two browser tabs or a CLI run racing the setup screen cannot both succeed. SUPERADMIN is never grantable through the staff API.
+
+## Resetting the superadmin password
+
+```bash
+# Interactive (prompts twice, so a typo cannot lock you out)
+pnpm auth:set-superadmin-password
+
+# Non-interactive
+SUPERADMIN_PASSWORD="a-new-secret-here" pnpm auth:set-superadmin-password
+```
+
+Separate script rather than a flag on the bootstrap, because the two have opposite preconditions: `create-superadmin` refuses to run if a SUPERADMIN exists, and this refuses to run if one does not.
+
+The reset **revokes every outstanding session** (it bumps `sessionVersion`, as `changePassword` and `resetPassword` do), because session cookies are stateless and would otherwise stay valid until they expire — so a stolen cookie would outlive the password meant to lock it out. Prefer the interactive prompt where there is a TTY: a password passed as a flag lands in shell history and in `ps` output.
+
+It does **not** ask for the current password, so that it also works when locked out. The trust boundary is therefore the database — and that is already the boundary for creating the account in the first place, via `/setup` or the CLI, both of which run without a session.
 
 ## Audit trail
 
@@ -90,13 +115,18 @@ Every meaningful action is recorded as an append-only audit event. The write pat
 is split in two so that auditing can never slow down or break the API:
 
 ```
-Next.js route handler -> service -> recordAudit() -> Redis (BullMQ)  ─┐
-                                                                      │ queue
-                                        audit worker (pnpm worker:audit) ┘
-                                                                      │
-                                                                      v
-                                                          PostgreSQL "AuditLog"
+route handler / Server Action -> service -> recordAudit() -> Redis (BullMQ)  ─┐
+                                                                            │ queue
+                                                  audit worker (compose service) ┘
+                                                                            │
+                                                                            v
+                                                                PostgreSQL "AuditLog"
 ```
+
+Both entry points audit: the REST route handlers (`src/lib/api.ts`) and the Server
+Actions behind every form (`src/lib/server/define-action.ts`). Each imports
+`src/lib/audit/install.ts`, which swaps in the real publisher — the default is a
+no-op, so a pipeline that forgets would discard events without erroring.
 
 - **Producer** (`src/lib/audit/queue.ts`): the handler returns as soon as Redis
   accepts the job. The API never waits for the audit database.
@@ -124,14 +154,36 @@ Next.js route handler -> service -> recordAudit() -> Redis (BullMQ)  ─┐
 
 ### Running the worker
 
+In Docker Compose it is already a service:
+
+```bash
+docker compose up -d worker     # or just: docker compose up -d
+docker compose ps worker        # healthcheck reads the heartbeat key
+```
+
+For a bare `pnpm dev` workflow, run it by hand:
+
 ```bash
 pnpm worker:audit         # production
 pnpm worker:audit:watch   # development
 ```
 
-The worker is a separate process, so it needs its own container/service in a
-real deployment and should run under a supervisor (systemd, Docker
-`--restart=always`) so a hard kill is recovered automatically.
+Either way it is a separate process and must run under a supervisor so a hard kill
+is recovered automatically — `restart: unless-stopped` in Compose, or systemd /
+`--restart=always` elsewhere. BullMQ does not always recover a worker whose socket
+died mid-flight, so the restart policy is what makes that case self-healing.
+
+**Nothing else is needed, but check it anyway.** A worker that is not running does
+not break the app: events queue in Redis and everything else looks healthy, which
+is exactly why it is dangerous. Two things surface it:
+
+- `/audit` shows a red banner naming how many events are waiting, and the empty
+  state says "events are queued, not yet recorded" rather than "no events yet".
+- `GET /api/audit-logs` returns `meta.worker` (`workerRunning`, `lastSeenAt`,
+  `waiting`, `active`, `failed`, `delayed`).
+
+The worker stamps a heartbeat key every 10s; a stamp older than 45s reads as down.
+A planned stop clears the key immediately, so deploys are not reported as failures.
 
 ### What gets recorded
 

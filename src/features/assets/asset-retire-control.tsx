@@ -66,7 +66,7 @@ export function AssetRetireControl({
 
         {assigned ? (
           <p className="text-c54-2xs text-c54-text-warning">
-            Currently assigned. Return it to staff first — retirement is blocked until then.
+            Currently assigned. Return it to staff first. Retirement is blocked until then.
           </p>
         ) : null}
 

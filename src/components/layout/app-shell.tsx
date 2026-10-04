@@ -56,7 +56,7 @@ export async function AppShell({
         </Link>
 
         {/* Nav scrolls on its own; the footer below never moves. */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 my-6 flex-1 overflow-y-auto">
           <SidebarNav items={navItems} />
         </div>
 

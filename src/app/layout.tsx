@@ -27,6 +27,14 @@ export const metadata: Metadata = {
   description: "Track hardware, hand it out, and keep the trail.",
   applicationName: "Inventory",
   robots: { index: false, follow: false },
+  // The C54 News mark, the same file the masthead and the printed tag use, so the
+  // tab and the sidebar agree. Declared rather than dropped in as
+  // `app/favicon.ico`: an .ico has to be rasterised by hand at four sizes, and
+  // this is the brand asset at the size it was drawn.
+  icons: {
+    icon: [{ url: "/images/logo.png", type: "image/png" }],
+    apple: [{ url: "/images/logo.png", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

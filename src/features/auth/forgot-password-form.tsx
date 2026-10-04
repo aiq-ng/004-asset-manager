@@ -55,6 +55,9 @@ export function ForgotPasswordForm() {
             autoFocus
             placeholder="you@company.com"
             invalid={field.invalid}
+            // React empties the form once the action returns, so a rejected
+            // address would otherwise need retyping rather than correcting.
+            defaultValue={state.values?.email ?? ""}
           />
         )}
       </Field>

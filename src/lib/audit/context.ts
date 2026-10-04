@@ -87,7 +87,11 @@ export type AuditPublisher = (event: AuditEventInput) => Promise<void>;
 /**
  * Overridable publisher. Kept as a module-level seam so the services can be
  * exercised (and the queue disabled in tests) without importing BullMQ, and so
- * `lib/api.ts` can install the real one without a circular import.
+ * the entry points can install the real one without a circular import.
+ *
+ * The default is a no-op, which means a process that forgets to install the real
+ * publisher discards every event *without error*. Import `lib/audit/install.ts`
+ * from any pipeline that publishes a request context.
  */
 let publisher: AuditPublisher = async () => {};
 

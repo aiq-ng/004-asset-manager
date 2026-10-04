@@ -116,7 +116,7 @@ export async function RecentAssetsSection({ items }: { items: Promise<{ items: R
                       <span className="text-c54-2xs text-c54-text-muted">{asset.assetType.name}</span>
                     </p>
                   </div>
-                  <Badge tone={status.tone} dot size="sm">
+                  <Badge tone={status.tone} icon={status.icon} size="sm">
                     {status.label}
                   </Badge>
                 </Link>

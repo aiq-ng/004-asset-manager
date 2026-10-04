@@ -76,8 +76,15 @@ function AssetIdPreview({ code }: { code: string }) {
  * open starts clean.
  */
 function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
-  const [state, formAction] = useActionState(createAssetTypeAction, INITIAL_ACTION_STATE);
-  const [code, setCode] = useState("");
+  const [state, formAction, pending] = useActionState(
+    createAssetTypeAction,
+    INITIAL_ACTION_STATE,
+  );
+  // The preview reads what came back after a rejected submission, so it keeps
+  // showing the code being entered instead of dropping back to the placeholder.
+  // The fallback to local state is what makes typing still drive it.
+  const [typedCode, setTypedCode] = useState("");
+  const code = state.values?.code ?? typedCode;
 
   return (
     <Dialog
@@ -86,10 +93,11 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
       side="right"
       title="Add an asset type"
       description="A category that supplies the asset id prefix."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="asset-type-create-form" pendingLabel="Creating…">
+          <SubmitButton form="asset-type-create-form" pendingLabel="Creating…" pending={pending}>
             <Icons.Plus className="size-3.5" />
             Add type
           </SubmitButton>
@@ -107,7 +115,15 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
           hint="Shown wherever a type is picked, so write it the way people would say it."
           required
         >
-          {(field) => <Input {...field} id={field.id} name="name" placeholder="Laptop" />}
+          {(field) => (
+            <Input
+              {...field}
+              id={field.id}
+              name="name"
+              placeholder="Laptop"
+              defaultValue={state.values?.name ?? ""}
+            />
+          )}
         </Field>
 
         <Field
@@ -125,7 +141,8 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
               placeholder="LAP"
               maxLength={4}
               className="font-c54-mono uppercase"
-              onChange={(event) => setCode(event.target.value)}
+              defaultValue={state.values?.code ?? ""}
+              onChange={(event) => setTypedCode(event.target.value)}
             />
           )}
         </Field>
@@ -173,7 +190,10 @@ export function AssetTypeEditDialog({
   assetType: AssetTypeRow;
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(updateAssetTypeAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(
+    updateAssetTypeAction,
+    INITIAL_ACTION_STATE,
+  );
   const codeLocked = assetType.assetCount > 0;
 
   return (
@@ -182,10 +202,11 @@ export function AssetTypeEditDialog({
       onClose={onClose}
       title="Edit asset type"
       description={`${assetType.assetCount} ${assetType.assetCount === 1 ? "asset uses" : "assets use"} this type.`}
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="asset-type-edit-form" pendingLabel="Saving…">
+          <SubmitButton form="asset-type-edit-form" pendingLabel="Saving…" pending={pending}>
             Save
           </SubmitButton>
         </>
@@ -197,8 +218,12 @@ export function AssetTypeEditDialog({
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
         <Field label="Name" htmlFor="edit-type-name" error={state.fieldErrors?.name} required>
-          {(field) => (
-            <Input {...field} id={field.id} name="name" defaultValue={assetType.name} />
+          {(field) => (<Input
+              {...field}
+              id={field.id}
+              name="name"
+              defaultValue={state.values?.name ?? assetType.name}
+            />
           )}
         </Field>
 
@@ -217,7 +242,7 @@ export function AssetTypeEditDialog({
               {...field}
               id={field.id}
               name="code"
-              defaultValue={assetType.code}
+              defaultValue={state.values?.code ?? assetType.code}
               disabled={codeLocked}
               maxLength={4}
               className="font-c54-mono uppercase"

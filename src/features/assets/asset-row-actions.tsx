@@ -142,7 +142,7 @@ export function AssetRowActions({
         title="Retire this asset?"
         description={
           assigned
-            ? `${assetId} is currently assigned. Return it to staff first — retirement is blocked until then.`
+            ? `${assetId} is currently assigned. Return it to staff first. Retirement is blocked until then.`
             : `${assetId} will be withdrawn from the register. It stays in the database and in the audit trail, and can be recorded as available again later.`
         }
         confirmLabel="Retire asset"

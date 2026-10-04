@@ -6,6 +6,7 @@ import {
   searchParamsToObject,
 } from "@/lib/api";
 import { auditActionCounts, listAuditLogs } from "@/lib/services/audit";
+import { getAuditQueueHealth } from "@/lib/audit/health";
 import { listAuditLogsQuerySchema } from "@/lib/validators/audit";
 
 /**
@@ -16,6 +17,9 @@ import { listAuditLogsQuerySchema } from "@/lib/validators/audit";
  * Filters: `action`, `entityType`, `entityId`, `q` (summary/actor search),
  * `from`, `to`, plus the usual `page`/`pageSize`. `meta.actions` holds the
  * per-action totals so a UI can render a filter bar without a second request.
+ * `meta.worker` reports whether the worker that writes these rows is alive and
+ * how many events are still queued, so a consumer can tell an empty trail from
+ * an undelivered one.
  */
 export const GET = permissionRoute("audit:read", async (request) => {
   const query = parseOrThrow(
@@ -23,10 +27,11 @@ export const GET = permissionRoute("audit:read", async (request) => {
     searchParamsToObject(request.nextUrl.searchParams),
   );
 
-  const [{ items, total, page, pageSize }, actions] = await Promise.all([
+  const [{ items, total, page, pageSize }, actions, worker] = await Promise.all([
     listAuditLogs(query),
     auditActionCounts(),
+    getAuditQueueHealth(),
   ]);
 
-  return ok(items, { ...paginationMeta(page, pageSize, total), actions });
+  return ok(items, { ...paginationMeta(page, pageSize, total), actions, worker });
 });

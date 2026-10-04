@@ -44,17 +44,30 @@ const EXIT_TIMEOUT_MS = 600;
  * of the DOM on the same tick as the click, so the exit animation never gets a
  * frame — which is how a Cancel button ends up snapping shut while ESC glides.
  * Context is how the panel and its footer reach the same deferred path.
+ *
+ * `busy` rides along so the controls in the panel and its footer can lock
+ * together. See `Dialog`'s `busy` prop for what that is protecting.
  */
-const DialogCloseContext = createContext<(() => void) | null>(null);
+const DialogCloseContext = createContext<{
+  /** User-initiated dismissal; refused while `busy`. */
+  requestClose: () => void;
+  /** Programmatic close after a completed action; ignores `busy`. */
+  requestCloseResolved: () => void;
+  busy: boolean;
+} | null>(null);
 
-function useDialogClose(): () => void {
-  const requestClose = useContext(DialogCloseContext);
+function useDialog(): {
+  requestClose: () => void;
+  requestCloseResolved: () => void;
+  busy: boolean;
+} {
+  const value = useContext(DialogCloseContext);
 
-  if (!requestClose) {
+  if (!value) {
     throw new Error("Dialog controls must be rendered inside a <Dialog>");
   }
 
-  return requestClose;
+  return value;
 }
 
 /**
@@ -72,10 +85,15 @@ export function DialogCancelButton({
   React.ComponentProps<typeof Button>,
   "onClick" | "children"
 >) {
-  const requestClose = useDialogClose();
+  const { requestClose, busy } = useDialog();
 
+  // Locked while `busy`, unless the caller has explicitly said otherwise: a
+  // dismissal during an in-flight mutation closes the panel over a request that
+  // is still running, and the operator loses sight of its result.
   return (
-    <Button variant="outline" onClick={requestClose} {...props}>
+    // `{...props}` first for the same reason as `SubmitButton`: spread last
+    // would let a caller's `disabled` overwrite the busy lock.
+    <Button {...props} variant="outline" onClick={requestClose} disabled={busy || props.disabled}>
       {children}
     </Button>
   );
@@ -98,6 +116,11 @@ export function DialogCancelButton({
  * keep this mounted for the duration or unmount it on close — either way the
  * animation gets to run. That is what lets the trigger components stay as simple
  * as `{open ? <Sheet /> : null}`.
+ *
+ * `busy` says a mutation inside the panel is in flight. It disables the footer
+ * Cancel and the header close button, and makes ESC and a backdrop click no-ops,
+ * so a half-submitted form cannot be dismissed out from under itself. Callers
+ * get it from the third element of `useActionState`.
  */
 export function Dialog({
   open,
@@ -109,6 +132,7 @@ export function Dialog({
   size = "md",
   side = "center",
   className,
+  busy = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -119,6 +143,8 @@ export function Dialog({
   size?: DialogSize;
   side?: DialogSide;
   className?: string;
+  /** Disables every dismissal path while a mutation is in flight. */
+  busy?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -133,9 +159,32 @@ export function Dialog({
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  const requestClose = useCallback(() => {
+  // Two distinct close paths, and the difference matters.
+  //
+  // `requestClose` is a *user* dismissal — Cancel, the X, ESC, the backdrop.
+  // While a mutation is in flight those are dropped: the request would otherwise
+  // land the moment the action resolves, closing a panel the operator may have
+  // already been looking past.
+  //
+  // `requestCloseResolved` is the programmatic close a completed action asks for,
+  // and it deliberately ignores `busy`. `pending` is still true on the render
+  // where the action's success state first appears — React settles the two in
+  // the same commit — so a shared guard would refuse the close that the success
+  // path exists to perform, and the sheet would sit there for good. That is not
+  // hypothetical: it is what this pair was written to fix.
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  const closeNow = useCallback(() => {
     setPhase((current) => (current === "open" || current === "opening" ? "closing" : current));
   }, []);
+
+  const requestClose = useCallback(() => {
+    if (busyRef.current) return;
+    closeNow();
+  }, [closeNow]);
 
   // Prop changes drive the machine — but only *changes*. A dialog mounted
   // conditionally by its caller passes a literal `open` and never changes it, and
@@ -246,7 +295,7 @@ export function Dialog({
       : "open:animate-sheet-in";
 
   return createPortal(
-    <DialogCloseContext.Provider value={requestClose}>
+    <DialogCloseContext.Provider value={{ requestClose, requestCloseResolved: closeNow, busy }}>
     <dialog
       ref={ref}
       onClick={handleClick}
@@ -293,7 +342,7 @@ export function Dialog({
               </p>
             ) : null}
           </div>
-          <DialogCloseButton onClose={requestClose} />
+          <DialogCloseButton onClose={requestClose} disabled={busy} />
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-c54-pad-lg py-c54-pad">{children}</div>
@@ -324,21 +373,31 @@ export function Dialog({
  * within the provider to reach the context.
  */
 export function DialogCloseOnSuccess({ when }: { when: boolean }) {
-  const requestClose = useDialogClose();
+  // `requestCloseResolved`, not `requestClose`: the action's own success is
+  // exactly the moment `pending` is still true, so the busy guard meant for user
+  // dismissals would refuse this and strand the sheet open.
+  const { requestCloseResolved } = useDialog();
 
   useEffect(() => {
-    if (when) requestClose();
-  }, [when, requestClose]);
+    if (when) requestCloseResolved();
+  }, [when, requestCloseResolved]);
 
   return null;
 }
 
-export function DialogCloseButton({ onClose }: { onClose: () => void }) {
+export function DialogCloseButton({
+  onClose,
+  disabled = false,
+}: {
+  onClose: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClose}
-      className="-m-c54-2 shrink-0 rounded-c54-sm p-c54-2 text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary"
+      disabled={disabled}
+      className="-m-c54-2 shrink-0 rounded-c54-sm p-c54-2 text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary disabled:pointer-events-none disabled:opacity-45"
       aria-label="Close dialog"
     >
       <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">

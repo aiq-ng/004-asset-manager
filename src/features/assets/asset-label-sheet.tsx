@@ -184,8 +184,8 @@ function SheetSummary({
 
         {pages > 1 ? (
           <p className="max-w-xs text-c54-xs text-c54-text-muted">
-            Print in batches if your tray runs short — the print dialog can limit the run to a
-            page range.
+            If your tray runs short, print in batches. The print dialog can limit the
+            run to a page range.
           </p>
         ) : null}
       </div>

@@ -1,4 +1,5 @@
-import type { BadgeTone } from "@/components/ui/badge";
+import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
+import { Icons } from "@/components/ui/icons";
 
 /**
  * Presentation mapping for the backend's `Asset.status`.
@@ -14,25 +15,34 @@ export const ASSET_STATUSES = ["AVAILABLE", "ASSIGNED", "UNDER_REPAIR", "RETIRED
 
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
-const PRESENTATION: Record<AssetStatus, { label: string; tone: BadgeTone; hint: string }> = {
+const PRESENTATION: Record<
+  AssetStatus,
+  { label: string; tone: BadgeTone; icon: BadgeIcon; hint: string }
+> = {
   AVAILABLE: {
     label: "Available",
     tone: "success",
+    icon: Icons.CircleCheck,
     hint: "In stock and ready to hand out",
   },
   ASSIGNED: {
     label: "Assigned",
     tone: "info",
+    // A person signing for it, not a box: what distinguishes this status from
+    // every other one is that it is *someone's* right now.
+    icon: Icons.UserPen,
     hint: "Currently held by a member of staff",
   },
   UNDER_REPAIR: {
     label: "Under repair",
     tone: "warning",
+    icon: Icons.Wrench,
     hint: "Out of service pending a repair",
   },
   RETIRED: {
     label: "Retired",
     tone: "neutral",
+    icon: Icons.Archive,
     hint: "Permanently withdrawn from the register",
   },
 };
@@ -40,9 +50,17 @@ const PRESENTATION: Record<AssetStatus, { label: string; tone: BadgeTone; hint: 
 export function statusPresentation(status: string): {
   label: string;
   tone: BadgeTone;
+  icon: BadgeIcon;
   hint: string;
 } {
-  return PRESENTATION[status as AssetStatus] ?? { label: status, tone: "neutral", hint: "" };
+  return (
+    PRESENTATION[status as AssetStatus] ?? {
+      label: status,
+      tone: "neutral",
+      icon: Icons.Info,
+      hint: "",
+    }
+  );
 }
 
 export const ROLE_LABELS: Record<string, string> = {

@@ -1,3 +1,4 @@
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils/cn";
 
 export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -29,6 +30,21 @@ const SIZES: Record<ButtonSize, string> = {
   lg: "h-11 px-c54-6 text-c54-base",
   icon: "size-9",
   "icon-sm": "size-7",
+};
+
+/**
+ * Spinner diameter per button size, in pixels.
+ *
+ * `ClipLoader` sizes itself in px, so it cannot read the button's height token;
+ * these track it instead — ~70% of the control, which leaves the `gap-c54-2`
+ * breathing room on either side instead of crowding the label.
+ */
+const SPINNER_SIZES: Record<ButtonSize, number> = {
+  sm: 12,
+  md: 14,
+  lg: 16,
+  icon: 14,
+  "icon-sm": 12,
 };
 
 export function buttonClassName(
@@ -71,17 +87,8 @@ export function Button({
       className={buttonClassName(variant, size, cn(fullWidth && "w-full", className))}
       {...rest}
     >
-      {loading ? <Spinner className="size-3.5" /> : null}
+      {loading ? <Spinner size={SPINNER_SIZES[size]} /> : null}
       {children}
     </button>
-  );
-}
-
-export function Spinner({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" className={cn("size-4 animate-spin", className)} fill="none">
-      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-      <path d="M14.5 8A6.5 6.5 0 0 0 8 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
   );
 }

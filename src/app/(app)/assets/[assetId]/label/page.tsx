@@ -61,8 +61,8 @@ export default async function AssetLabelPage({
 
       <div className="c54-no-print mt-c54-section text-c54-2xs text-c54-text-muted">
         Tip: the QR encodes{" "}
-        <code className="font-c54-mono">/assets/{asset.assetId}</code> —
-        scanning it with a phone opens the detail page.
+        <code className="font-c54-mono">/assets/{asset.assetId}</code>.
+        Scan it with a phone to open the detail page.
       </div>
     </>
   );

@@ -37,3 +37,27 @@ COPY --from=builder /app/packages/tokens/build ./packages/tokens/build
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
+
+# The audit worker runs TypeScript directly under tsx, so unlike `runner` it
+# needs the devDependencies and the source tree rather than a compiled `.next`.
+# It is built from `deps` because that is where `pnpm install` has already put
+# every dependency, dev included.
+#
+# Without this image the audit trail silently stops being written: the app
+# queues events to Redis, nothing drains them, and `/audit` shows an empty
+# trail that looks exactly like a quiet week.
+FROM deps AS worker
+COPY --from=prisma-generator /app/src/generated ./src/generated
+COPY tsconfig.json ./
+COPY src ./src
+COPY scripts ./scripts
+
+# Migrations travel with the worker so the compose stack can be brought up from
+# scratch without a separate migrate step.
+COPY prisma ./prisma
+
+# Fail the build rather than ship an image whose worker cannot resolve the
+# generated Prisma client or the `@/*` path alias.
+RUN pnpm exec tsx -e "import { AUDIT_HEARTBEAT_KEY } from '@/lib/audit/heartbeat'; import { PrismaClient } from '@/generated/prisma/client'; console.log('worker image ok:', AUDIT_HEARTBEAT_KEY, typeof PrismaClient)"
+
+CMD ["pnpm", "worker:audit"]

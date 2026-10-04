@@ -26,6 +26,18 @@ export interface ActionState<T = undefined> {
   error: string;
   code?: string;
   fieldErrors?: Record<string, string>;
+  /**
+   * The submitted text fields, echoed back when the action fails.
+   *
+   * React empties an uncontrolled form once its Server Action returns, whether
+   * or not it succeeded, so without this a validation message arrives having
+   * cost the person everything they typed. Feeding a field back as its
+   * `defaultValue` puts it back on the next render.
+   *
+   * First value wins for a repeated key, so an array field never becomes a
+   * string here; those forms hold their own state.
+   */
+  values?: Record<string, string>;
 }
 
 /** The state a form starts from: no error, nothing submitted yet. */
@@ -41,6 +53,36 @@ export function toFieldErrors(error: z.ZodError): Record<string, string> {
   }
 
   return fieldErrors;
+}
+
+/**
+ * Field names whose value is never echoed back, however the field is spelled.
+ *
+ * A secret in `state.values` is a secret in the RSC payload, which means it is
+ * in the response body, in anything that logs one, and in the rendered markup of
+ * the page — for a form that is supposed to be holding nothing but a name and an
+ * address. Matching on the name rather than listing fields means a new
+ * `confirmNewPassword` is covered by the same rule as the one it confirms.
+ */
+const SECRET_KEY = /pass|secret|token|credential/i;
+
+/**
+ * The string entries of a submission, for echoing back into a failed form.
+ *
+ * Files are dropped, secrets are dropped, and only the first value of a repeated
+ * key is kept: this is for repopulating text fields, not for replaying a
+ * submission.
+ */
+export function submittedValues(formData: FormData): Record<string, string> {
+  const values: Record<string, string> = {};
+
+  for (const [key, value] of formData.entries()) {
+    if (typeof value !== "string") continue;
+    if (SECRET_KEY.test(key)) continue;
+    if (values[key] === undefined) values[key] = value;
+  }
+
+  return values;
 }
 
 /**

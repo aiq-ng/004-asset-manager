@@ -11,6 +11,7 @@ import {
   replaceAssetImage,
   retireAsset,
   updateAsset,
+  type BulkAssetResult,
 } from "@/lib/services/assets";
 import { createAssignment, returnAssignment } from "@/lib/services/assignments";
 import { parseUploadedImage } from "@/lib/services/images";
@@ -25,9 +26,14 @@ import {
 import { createAssignmentSchema, returnAssignmentSchema } from "@/lib/validators/assignment";
 import { ApiError } from "@/lib/errors";
 import { runWithRequestContext } from "@/lib/audit/context";
-import { requirePermission } from "@/lib/auth/permissions";
+import { can, requirePermission } from "@/lib/auth/permissions";
 import { getActor } from "@/lib/auth/actor";
-import { formDataToObject, toFieldErrors, type ActionState } from "@/lib/server/action-state";
+import {
+  formDataToObject,
+  submittedValues,
+  toFieldErrors,
+  type ActionState,
+} from "@/lib/server/action-state";
 import { z } from "zod";
 
 /**
@@ -98,10 +104,11 @@ export async function createAssetAction(
         ok: false,
         error: "Please correct the highlighted fields.",
         fieldErrors: toFieldErrors(error),
+        values: submittedValues(formData),
       };
     }
 
-    return toFailure(error);
+    return toFailure(error, formData);
   }
 }
 
@@ -115,19 +122,64 @@ export async function createAssetAction(
  * `revalidate` stays on, so every save re-renders the register behind the sheet
  * and the row appears as it is entered.
  *
- * `unit` is pinned to 1 here rather than trusted from the client: the quantity in
- * this flow is the number of rows being entered, and each of those rows is a
- * single physical item.
+ * Nothing about the quantity is passed through: in this flow it is the number of
+ * rows being entered, and each of those rows is a single physical item.
  */
-export const createBulkAssetEntryAction = defineAction(
-  bulkAssetEntrySchema,
-  (input) => createAsset({ ...input, unit: 1 }),
-  {
-    route: "action:createBulkAssetEntry",
-    permission: "asset:manage",
-    successMessage: "Item registered.",
-  },
-);
+/**
+ * Creates one row of a batch register, with the batch's photo if there is one.
+ *
+ * Hand-rolled rather than `defineAction` for the same reason `createAssetAction`
+ * is: the photo arrives as a `File`, and the shared `formDataToObject` drops
+ * non-string entries by design. The guarantees match the factory — actor,
+ * permission, audit context, serialisable failures, `refresh` — so the sheet can
+ * stay open and keep counting.
+ *
+ * Only one row exists at this point, so `replaceAssetImage` is the right tool and
+ * the audit trail gets one image event per save, which is proportionate to a save
+ * the operator took one at a time.
+ */
+export async function createBulkAssetEntryAction(
+  _previousState: ActionState<AssetDto>,
+  formData: FormData,
+): Promise<ActionState<AssetDto>> {
+  try {
+    const actor = await getActor();
+    if (!actor) throw ApiError.unauthenticated("Your session has expired. Please sign in again.");
+    requirePermission(actor, "asset:manage");
+
+    const input = bulkAssetEntrySchema.parse(formDataToObject(formData));
+
+    const file = formData.get("file");
+    const image = file instanceof File && file.size > 0 ? await parseUploadedImage(file) : undefined;
+
+    const created = await runWithRequestContext(
+      await actionRequestContext("action:createBulkAssetEntry", actor),
+      async () => {
+        const created = await createAsset(input);
+        if (image) await replaceAssetImage(created.assetId, image);
+        return created;
+      },
+    );
+
+    // `defineAction` did this for the sheet before it was hand-rolled: every save
+    // re-renders the register behind it, so the row appears as it is entered.
+    refresh();
+    return { ok: true, data: created, error: "", message: "Item registered." };
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof z.ZodError) {
+      return {
+        ok: false,
+        error: "Please correct the highlighted fields.",
+        fieldErrors: toFieldErrors(error),
+        values: submittedValues(formData),
+      };
+    }
+
+    return toFailure(error, formData);
+  }
+}
 
 /**
  * Registers the whole filled-in column in one submission.
@@ -140,15 +192,42 @@ export const createBulkAssetEntryAction = defineAction(
  * No redirect, for the same reason: the sheet still has to show what was created
  * and what was refused, which is the whole point of the response.
  */
-export const submitBulkAssetEntryAction = defineAction(
-  bulkAssetSubmitSchema,
-  (input) => createAssetsInBulk(input),
-  {
-    route: "action:submitBulkAssetEntry",
-    permission: "asset:manage",
-    successMessage: "Registered.",
-  },
-);
+export async function submitBulkAssetEntryAction(
+  _previousState: ActionState<BulkAssetResult>,
+  formData: FormData,
+): Promise<ActionState<BulkAssetResult>> {
+  try {
+    const actor = await getActor();
+    if (!actor) throw ApiError.unauthenticated("Your session has expired. Please sign in again.");
+    requirePermission(actor, "asset:manage");
+
+    const input = bulkAssetSubmitSchema.parse(formDataToObject(formData));
+
+    const file = formData.get("file");
+    const image = file instanceof File && file.size > 0 ? await parseUploadedImage(file) : undefined;
+
+    const result = await runWithRequestContext(
+      await actionRequestContext("action:submitBulkAssetEntry", actor),
+      async () => createAssetsInBulk(input, image),
+    );
+
+    refresh();
+    return { ok: true, data: result, error: "", message: "Registered." };
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof z.ZodError) {
+      return {
+        ok: false,
+        error: "Please correct the highlighted fields.",
+        fieldErrors: toFieldErrors(error),
+        values: submittedValues(formData),
+      };
+    }
+
+    return toFailure(error, formData);
+  }
+}
 
 export const updateAssetAction = defineAction(
   updateAssetSchema.extend({ assetId: z.string().trim().min(1).max(64) }),
@@ -163,9 +242,26 @@ export const updateAssetAction = defineAction(
  * rather than a silently ignored field; it is parsed here and handed to
  * `updateAsset`, which is the single place the status transition rules live.
  */
+/**
+ * The narrow status-only path an ASSIGNER is allowed.
+ *
+ * The status is range-checked against the actor here rather than by narrowing
+ * the schema, because `defineAction` takes one schema for every caller and the
+ * schema alone cannot know who is submitting. `RETIRED` is the one value that
+ * matters: it is a `asset:manage` operation, so an ASSIGNER reaching it through
+ * this action would be the same escalation the REST route had, reached by a
+ * different door. Refused with the permission message rather than a validation
+ * one, because the request was well-formed — the caller simply is not allowed to
+ * make it.
+ */
 export const updateAssetStatusAction = defineAction(
   assetRefSchema.extend(updateAssetStatusSchema.shape),
-  ({ assetId, status }) => updateAsset(assetId, { status }),
+  ({ assetId, status }, actor) => {
+    if (status === "RETIRED" && !can(actor.role, "asset:manage")) {
+      throw ApiError.forbidden("Retiring an asset requires admin rights");
+    }
+    return updateAsset(assetId, { status });
+  },
   {
     route: "action:updateAssetStatus",
     permission: "asset:updateStatus",
@@ -236,10 +332,11 @@ export async function returnAssetAction(
         ok: false,
         error: "Please correct the highlighted fields.",
         fieldErrors: toFieldErrors(error),
+        values: submittedValues(formData),
       };
     }
 
-    return toFailure(error);
+    return toFailure(error, formData);
   }
 }
 
@@ -310,7 +407,7 @@ export async function uploadAssetImageAction(
       return { ok: false, error: "Please correct the highlighted fields." };
     }
 
-    return toFailure(error);
+    return toFailure(error, formData);
   }
 }
 
@@ -348,6 +445,6 @@ export async function removeAssetImageAction(
       return { ok: false, error: "Please correct the highlighted fields." };
     }
 
-    return toFailure(error);
+    return toFailure(error, formData);
   }
 }

@@ -37,6 +37,11 @@ export function LoginForm({ next }: { next: string }) {
             autoFocus
             placeholder="you@company.com"
             invalid={field.invalid}
+            // React empties the form once the action returns, so without this a
+            // mistyped password would arrive having also thrown away the address
+            // it was mistyped against. The password itself is never echoed:
+            // `submittedValues` drops anything that looks like a secret.
+            defaultValue={state.values?.email ?? ""}
           />
         )}
       </Field>

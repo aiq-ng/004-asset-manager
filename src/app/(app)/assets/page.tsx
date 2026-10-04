@@ -25,8 +25,8 @@ import {
   LabelPrintBar,
 } from "@/features/assets/asset-selection";
 import { listAssetTypes } from "@/lib/services/asset-types";
-import { listAssets, listMatchingAssetIds } from "@/lib/services/assets";
-import { listStaff } from "@/lib/services/staff";
+import { listAssetFacets, listAssets, listMatchingAssetIds } from "@/lib/services/assets";
+import { listStaffOptions } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
@@ -58,7 +58,9 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
   // Everyone gets the holder list, because the "Holder" filter is a filter and
   // not an action: hiding it from users who cannot assign would leave them with
   // no way to answer "what is Ana holding?". Only the assign dialog narrows it.
-  const staff = listStaff({ page: 1, pageSize: 100 });
+  // All of them, not a page of them — the pickers search and virtualise, so a
+  // person past the first hundred is as reachable as any other.
+  const staff = listStaffOptions();
   const results = listAssets(query);
   // Overlaps the list read rather than following it, and is only asset numbers.
   // "Select all" has to reach across pages or a hundred laptops would still mean
@@ -92,7 +94,7 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
           <FilterBar
             current={current}
             placeholder="Search id, serial or description"
-            selects={await filterDefinitions(assetTypes, staff, current)}
+            selects={await filterDefinitions(assetTypes, staff, listAssetFacets(), current)}
           />
         </Suspense>
 
@@ -118,10 +120,23 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
 
 async function filterDefinitions(
   assetTypes: Promise<Awaited<ReturnType<typeof listAssetTypes>>>,
-  staff: Promise<Awaited<ReturnType<typeof listStaff>>>,
+  staff: Promise<Awaited<ReturnType<typeof listStaffOptions>>>,
+  facets: Promise<Awaited<ReturnType<typeof listAssetFacets>>>,
   params: Record<string, string>,
 ): Promise<FilterDefinition[]> {
-  const [types, holders] = await Promise.all([assetTypes, staff]);
+  const [types, holders, { brands, models }] = await Promise.all([
+    assetTypes,
+    staff,
+    facets,
+  ]);
+
+  // Narrowed to the chosen brand. A model belongs to a brand, so listing every
+  // model in the company under every brand is a list nobody can read; picking
+  // "Dell" leaves "Latitude 5440" and "UltraSharp 27" and drops "27UP850".
+  // No brand chosen means no narrowing, which is the "Any brand" state.
+  const visibleModels = params.brand
+    ? models.filter((row) => row.brand === params.brand).map((row) => row.model)
+    : [...new Set(models.map((row) => row.model))].sort();
 
   return [
     {
@@ -146,6 +161,24 @@ async function filterDefinitions(
       ],
     },
     {
+      name: "brand",
+      label: "Brand",
+      value: params.brand ?? "",
+      options: [
+        { value: "", label: "Any brand" },
+        ...brands.map((brand) => ({ value: brand, label: brand })),
+      ],
+    },
+    {
+      name: "model",
+      label: "Model",
+      value: params.model ?? "",
+      options: [
+        { value: "", label: "Any model" },
+        ...visibleModels.map((model) => ({ value: model, label: model })),
+      ],
+    },
+    {
       name: "assignedTo",
       label: "Holder",
       value: params.assignedTo ?? "",
@@ -154,9 +187,9 @@ async function filterDefinitions(
       // their assets unfilterable.
       options: [
         { value: "", label: "Anyone" },
-        ...holders.items.map((person) => ({
+        ...holders.map((person) => ({
           value: person.id,
-          label: `${person.name} — ${person.department}`,
+          label: `${person.name} (${person.department})`,
         })),
       ],
     },
@@ -182,7 +215,7 @@ async function AssetResults({
   results: Promise<Awaited<ReturnType<typeof listAssets>>>;
   permissions: { canManage: boolean; canAssign: boolean; canUpdateStatus: boolean };
   actor: { id: string; role: string };
-  staff: Promise<Awaited<ReturnType<typeof listStaff>>>;
+  staff: Promise<Awaited<ReturnType<typeof listStaffOptions>>>;
   basePath: string;
   current: Record<string, string>;
 }) {
@@ -192,7 +225,7 @@ async function AssetResults({
   // The raw list is for the dialog only; the Holder filter is built separately
   // above. Narrowing here means an assigner is never offered themselves or a
   // superadmin, so the picker cannot present a choice the service will reject.
-  const allStaff = (await staff).items;
+  const allStaff = await staff;
   const candidates = permissions.canAssign
     ? allStaff.filter((person) => isAssignableTarget(actor, person))
     : undefined;

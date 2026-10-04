@@ -9,7 +9,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { FilterBar } from "@/features/shared/filter-bar";
 import { AuditChanges } from "@/features/audit/audit-changes";
+import { AuditWorkerStatus } from "@/features/audit/audit-worker-status";
 import { actionPresentation, entityHref, humanize } from "@/features/audit/audit-presentation";
+import { getAuditQueueHealth } from "@/lib/audit/health";
+import { hasAuditBacklog } from "@/lib/audit/heartbeat";
 import { listAuditLogs } from "@/lib/services/audit";
 import { requirePagePermission } from "@/lib/server/guard";
 import { queryFromSearchParams } from "@/lib/server/query";
@@ -30,6 +33,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/audit">) {
   const query = await queryFromSearchParams(listAuditLogsQuerySchema, Promise.resolve(current));
 
   const results = listAuditLogs(query);
+  const health = getAuditQueueHealth();
   const now = new Date();
 
   return (
@@ -69,10 +73,28 @@ export default async function AuditPage({ searchParams }: PageProps<"/audit">) {
         />
 
         <Suspense fallback={<div className="h-40" />}>
-          <AuditResults results={results} current={current} now={now} />
+          <AuditWorkerWarning health={health} now={now} />
+          <AuditResults results={results} current={current} now={now} health={health} />
         </Suspense>
       </div>
     </>
+  );
+}
+
+/** Resolves the heartbeat before rendering, so the banner never flashes in late. */
+async function AuditWorkerWarning({
+  health,
+  now,
+}: {
+  health: Promise<Awaited<ReturnType<typeof getAuditQueueHealth>>>;
+  now: Date;
+}) {
+  const resolved = await health;
+
+  return (
+    <div className="mb-c54-gap">
+      <AuditWorkerStatus health={resolved} now={now} />
+    </div>
   );
 }
 
@@ -80,23 +102,38 @@ async function AuditResults({
   results,
   current,
   now,
+  health,
 }: {
   results: Promise<Awaited<ReturnType<typeof listAuditLogs>>>;
   current: Record<string, string>;
   now: Date;
+  health: Promise<Awaited<ReturnType<typeof getAuditQueueHealth>>>;
 }) {
-  const { items, total, page, pageSize } = await results;
+  const [{ items, total, page, pageSize }, queueHealth] = await Promise.all([results, health]);
 
   if (items.length === 0) {
+    // An empty trail has two very different causes, and the default copy
+    // ("nothing has happened yet") is a lie when events are queued and
+    // undelivered. Say which one this is.
+    const undelivered = hasAuditBacklog(queueHealth);
+
     return (
       <Card>
         <EmptyState
           icon={<Icons.Clipboard className="size-5" />}
-          title={hasActiveFilters(current) ? "No events match those filters" : "No events yet"}
+          title={
+            hasActiveFilters(current)
+              ? "No events match those filters"
+              : undelivered
+                ? "Events are queued, not yet recorded"
+                : "No events yet"
+          }
           description={
             hasActiveFilters(current)
               ? "Widen the date range, or clear the filters."
-              : "Sign-ins and every asset change will appear here."
+              : undelivered
+                ? "The audit worker is not running, so recent activity has not reached the trail yet."
+                : "Sign-ins and every asset change will appear here."
           }
         />
       </Card>
@@ -113,7 +150,7 @@ async function AuditResults({
             <article key={entry.id} className="px-c54-pad-lg py-c54-4">
               <div className="flex flex-wrap items-start justify-between gap-c54-3">
                 <div className="flex min-w-0 items-start gap-c54-3">
-                  <Badge tone={presentation.tone} dot className="mt-0.5 shrink-0">
+                  <Badge tone={presentation.tone} icon={presentation.icon} className="mt-0.5 shrink-0">
                     {presentation.label}
                   </Badge>
                   <div className="min-w-0">

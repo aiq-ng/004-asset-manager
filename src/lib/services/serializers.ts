@@ -109,7 +109,7 @@ export interface AssetDto {
   assetId: string;
   description: string;
   brand: string | null;
-  unit: number;
+  model: string | null;
   serialNumber: string | null;
   status: string;
   imageKey: string | null;
@@ -154,14 +154,23 @@ function toAssignmentDto(row: AssignmentRow): AssignmentDto {
 type AssetRow = AssetRecord | AssetWithHistory;
 
 function toAssetBase(asset: AssetRow, imageUrl: string | null): AssetDto {
-  const active = asset.assignments[0] ?? null;
+  // The *open* assignment, which is not the same as the newest row.
+  //
+  // `assetInclude` filters to `dateReturned: null` at the database, but
+  // `assetWithHistoryInclude` overrides that clause to return every assignment
+  // for the timeline, so on the detail page this list still contains closed
+  // ones. Taking `[0]` there handed back the most recent assignment whatever its
+  // state, which left the detail panel showing a holder who had already returned
+  // the asset, together with a Record return button for a row that was closed.
+  // Finding the open one here keeps the two include variants interchangeable.
+  const active = asset.assignments.find((row) => row.dateReturned === null) ?? null;
 
   return {
     id: asset.id,
     assetId: asset.assetId,
     description: asset.description,
     brand: asset.brand,
-    unit: asset.unit,
+    model: asset.model,
     serialNumber: asset.serialNumber,
     status: asset.status,
     imageKey: asset.imageKey,

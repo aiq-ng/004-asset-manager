@@ -6,10 +6,12 @@ import { createAssetAction } from "@/features/assets/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Select } from "@/components/ui/controls";
+import { Input } from "@/components/ui/controls";
+import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { Icons } from "@/components/ui/icons";
+import { useRetainedFile } from "@/features/shared/use-retained-file";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
 
@@ -40,9 +42,11 @@ function AssetCreateDialog({
   assetTypes: AssetTypeOption[];
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(createAssetAction, INITIAL_ACTION_STATE);
-  const [unit, setUnit] = useState("1");
-  const [photoName, setPhotoName] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(createAssetAction, INITIAL_ACTION_STATE);
+  // The photo is a `File`, so it cannot come back through `state.values` the way
+  // the text fields do. It is stashed here instead and re-attached after a
+  // rejected submit, so a retry still carries the picture.
+  const photo = useRetainedFile({ submission: state, ok: state.ok });
 
   return (
     <Dialog
@@ -51,16 +55,23 @@ function AssetCreateDialog({
       side="right"
       title="Register asset"
       description="Add an item to the register. The asset id is allocated on save."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="asset-create-form" pendingLabel="Registering…">
+          {/* `pending` is passed because this button is in the footer, outside the
+              form below, where `useFormStatus` cannot see it. See `SubmitButton`. */}
+          <SubmitButton form="asset-create-form" pendingLabel="Registering…" pending={pending}>
             Register asset
           </SubmitButton>
         </>
       }
     >
       <form id="asset-create-form" action={formAction} className="flex flex-col gap-c54-4">
+        {/* Every field below is seeded from the last submission. React empties an
+            uncontrolled form once its action returns, so without this a rejected
+            registration would arrive having thrown away the description, the type
+            and the photo picker along with the two fields that were wrong. */}
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
         <Field
@@ -71,14 +82,28 @@ function AssetCreateDialog({
           required
         >
           {(field) => (
-            <Select {...field} id={field.id} name="assetType" invalid={field.invalid} defaultValue="">
-              <option value="">Choose a type…</option>
-              {assetTypes.map((type) => (
-                <option key={type.id} value={type.code}>
-                  {type.name} ({type.code})
-                </option>
-              ))}
-            </Select>
+            <EntitySelect
+              // Keyed on what came back, because a `<select>` only reads its
+              // `defaultValue` when it mounts: React marks the chosen option
+              // `defaultSelected` once, and the reset after a failed action puts
+              // the selection back to that mark. Re-keying is what puts the
+              // person's type back where they left it.
+              key={state.values?.assetType ?? "unsubmitted"}
+              {...field}
+              id={field.id}
+              name="assetType"
+              invalid={field.invalid}
+              defaultValue={state.values?.assetType ?? ""}
+              options={assetTypes.map((type) => ({
+                value: type.code,
+                // The code is searchable as well as shown: it is what appears on
+                // the asset id, so it is what somebody arrives holding.
+                label: `${type.name} (${type.code})`,
+                searchKeys: [type.code],
+              }))}
+              placeholder="Choose a type…"
+              searchPlaceholder="Search types or codes…"
+            />
           )}
         </Field>
 
@@ -94,6 +119,7 @@ function AssetCreateDialog({
               {...field}
               id={field.id}
               name="name"
+              defaultValue={state.values?.name ?? ""}
               placeholder="14-inch developer laptop"
             />
           )}
@@ -103,10 +129,34 @@ function AssetCreateDialog({
           label="Brand"
           htmlFor="asset-brand"
           error={state.fieldErrors?.brand}
-          hint={'Optional. Composes the name as "Name (Brand)".'}
+          hint="Who made it. Searchable and filterable on its own."
+          required
         >
           {(field) => (
-            <Input {...field} id={field.id} name="brand" placeholder="HP, Dell, Lenovo…" />
+            <Input
+              {...field}
+              id={field.id}
+              name="brand"
+              defaultValue={state.values?.brand ?? ""}
+              placeholder="HP, Dell, Lenovo…"
+            />
+          )}
+        </Field>
+
+        <Field
+          label="Model"
+          htmlFor="asset-model"
+          error={state.fieldErrors?.model}
+          hint="Optional. Searchable and filterable on its own."
+        >
+          {(field) => (
+            <Input
+              {...field}
+              id={field.id}
+              name="model"
+              defaultValue={state.values?.model ?? ""}
+              placeholder="Latitude 5440, ProBook 450…"
+            />
           )}
         </Field>
 
@@ -114,22 +164,16 @@ function AssetCreateDialog({
           label="Serial number"
           htmlFor="asset-serial"
           error={state.fieldErrors?.serialNumber}
-          hint="Optional. Stored as NULL if left blank."
+          hint="Printed on the item. It is how the asset is found again."
+          required
         >
-          {(field) => <Input {...field} id={field.id} name="serialNumber" placeholder="C02X1234ABCD" />}
-        </Field>
-
-        <Field label="Units" htmlFor="asset-unit" error={state.fieldErrors?.unit} required>
           {(field) => (
             <Input
               {...field}
               id={field.id}
-              name="unit"
-              type="number"
-              min={1}
-              step={1}
-              value={unit}
-              onChange={(event) => setUnit(event.target.value)}
+              name="serialNumber"
+              defaultValue={state.values?.serialNumber ?? ""}
+              placeholder="C02X1234ABCD"
             />
           )}
         </Field>
@@ -150,14 +194,14 @@ function AssetCreateDialog({
             className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
           >
             <Icons.Upload className="size-3.5" />
-            {photoName ?? "Choose an image (optional)"}
+            {photo.name ?? "Choose an image (optional)"}
             <input
+              {...photo.inputProps}
               id="asset-photo"
               type="file"
               name="file"
               accept="image/jpeg,image/png,image/webp"
               className="sr-only"
-              onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? null)}
             />
           </label>
           <p className="text-c54-2xs text-c54-text-muted">

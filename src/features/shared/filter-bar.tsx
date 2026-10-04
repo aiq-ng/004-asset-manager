@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/controls";
+import { EntitySelect } from "@/components/ui/entity-select";
 import { Icons } from "@/components/ui/icons";
 import { buildQuery } from "@/lib/utils/search-params";
 
@@ -123,25 +123,32 @@ export function FilterBar({
         />
       </form>
 
+      {/* `xl:w-52` rather than `w-44`: once a filter upgrades to a searchable
+          box its prompt reads "Search department…", which an 11rem column clips
+          mid-word. */}
       {selects.map((select) => (
-        <div key={select.name} className="w-full xl:w-44">
+        <div key={select.name} className="w-full xl:w-52">
           <label
             htmlFor={`filter-${select.name}`}
             className="mb-c54-1 block text-c54-2xs font-c54-semibold tracking-c54-widest text-c54-text-muted uppercase"
           >
             {select.label}
           </label>
-          <Select
+          <EntitySelect
             id={`filter-${select.name}`}
             value={select.value}
-            onChange={(event) => setParam(select.name, event.target.value)}
-          >
-            {select.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
+            // The filter list grows the same way every other list does — a
+            // department list past a dozen stops being scannable — so it upgrades
+            // itself. `searchable` stays unset on purpose: role has four values
+            // and always will, so the threshold leaves it as a native select
+            // without anybody having to say so.
+            options={select.options}
+            // Named after the filter rather than a bare "Search…": once the
+            // control becomes a text box, the only thing telling the operator
+            // what they are searching is the prompt inside it.
+            searchPlaceholder={`Search ${select.label.toLowerCase()}…`}
+            onChange={(next) => setParam(select.name, next)}
+          />
         </div>
       ))}
 

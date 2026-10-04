@@ -80,7 +80,11 @@ export function AssignmentTable({
               ) : null}
             </div>
             {assignment.dateReturned === null && canReturn ? (
-              <ReturnButton assignmentId={assignment.id} assetId={assignment.assetId} />
+              <ReturnButton
+                assignmentId={assignment.id}
+                assetId={assignment.assetId}
+                holderName={assignment.staff.name}
+              />
             ) : null}
           </li>
         ))}
@@ -144,7 +148,11 @@ function AssignmentRow({
       </TableCell>
       <TableCell>
         {active && canReturn ? (
-          <ReturnButton assignmentId={assignment.id} assetId={assignment.assetId} />
+          <ReturnButton
+            assignmentId={assignment.id}
+            assetId={assignment.assetId}
+            holderName={assignment.staff.name}
+          />
         ) : null}
       </TableCell>
     </TableRow>

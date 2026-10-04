@@ -140,9 +140,9 @@ export function inviteEmailHtml(input: InviteEmailInput): string {
   const { name, email, temporaryPassword, loginUrl, appUrl } = input;
 
   return layout({
-    preview: `Your ${APP_NAME} account is ready — sign in with the details below.`,
+    preview: `Your ${APP_NAME} account is ready. Sign in with the details below.`,
     heading: `Welcome, ${escapeHtml(name)}`,
-    body: `<p style="margin:0 0 12px 0;">An account has been created for you on ${escapeHtml(APP_NAME)}, the asset register. Use the credentials below to sign in — you will be asked to keep them safe.</p>`,
+    body: `<p style="margin:0 0 12px 0;">An account has been created for you on ${escapeHtml(APP_NAME)}, the asset register. Use the credentials below to sign in, and keep them safe.</p>`,
     content: `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${COLORS.muted}; border-radius:8px; border:1px solid ${COLORS.border};">
         <tr>
@@ -194,9 +194,9 @@ export function resetEmailHtml(input: ResetEmailInput): string {
   const { name, resetUrl, expiresInMinutes, appUrl } = input;
 
   return layout({
-    preview: `A link to reset your ${APP_NAME} password — it expires in ${expiresInMinutes} minutes.`,
+    preview: `A link to reset your ${APP_NAME} password. It expires in ${expiresInMinutes} minutes.`,
     heading: name ? `Password reset` : `Password reset`,
-    body: `<p style="margin:0 0 12px 0;">${name ? `${escapeHtml(name)}, s` : "S"}omeone asked to reset the password for your ${escapeHtml(APP_NAME)} account. Click below to choose a new one — the link works once and expires in ${expiresInMinutes} minutes.</p>`,
+    body: `<p style="margin:0 0 12px 0;">${name ? `${escapeHtml(name)}, s` : "S"}omeone asked to reset the password for your ${escapeHtml(APP_NAME)} account. Click below to choose a new one. The link works once and expires in ${expiresInMinutes} minutes.</p>`,
     content: `${button(resetUrl, "Choose a new password")}`,
     appUrl,
   });
@@ -210,6 +210,6 @@ export function resetEmailText(input: ResetEmailInput): string {
     "",
     `  ${input.resetUrl}`,
     "",
-    `If you did not ask for this, you can ignore the email — your password stays as it was.`,
+    `If you did not ask for this, you can ignore the email. Your password stays as it was.`,
   ].join("\n");
 }

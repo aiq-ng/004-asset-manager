@@ -8,6 +8,7 @@ import IORedis from "ioredis";
 
 import { AUDIT_QUEUE_NAME } from "@/lib/audit/events";
 import type { AuditEvent } from "@/lib/audit/events";
+import { AUDIT_HEARTBEAT_INTERVAL_MS, AUDIT_HEARTBEAT_KEY } from "@/lib/audit/heartbeat";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
@@ -50,6 +51,23 @@ const worker = new Worker<AuditEvent>(
   async (job: Job<AuditEvent>) => {
     const event = job.data;
 
+    // The queue is asynchronous, so an account can be deleted between the moment
+    // an event was published and the moment it is persisted here. The
+    // `AuditLog.actorId` foreign key is `onDelete: SetNull`, which covers a row
+    // that already exists when the staff member goes; it does nothing for a row
+    // inserted afterwards, so the insert would fail with P2003, retry five times
+    // and drop the event.
+    //
+    // That silently lost the tail of somebody's activity — and the trail is
+    // explicitly built to keep it: `actor.exists` is documented as "false once the
+    // account has been deleted", and the audit page renders "(account deleted)".
+    // So the actor's identity is kept in the denormalised columns and only the
+    // reference is dropped, which is exactly the state that read model expects.
+    const actorId =
+      event.actorId && (await prisma.staff.count({ where: { id: event.actorId } })) > 0
+        ? event.actorId
+        : null;
+
     await prisma.auditLog.upsert({
       where: { eventId: event.eventId },
       create: {
@@ -61,7 +79,7 @@ const worker = new Worker<AuditEvent>(
         // `null` means "there was nothing to record", not JSON null.
         changes: (event.changes ?? Prisma.DbNull) as Prisma.InputJsonValue,
         metadata: (event.metadata ?? Prisma.DbNull) as Prisma.InputJsonValue,
-        actorId: event.actorId,
+        actorId,
         actorName: event.actorName,
         actorEmail: event.actorEmail,
         actorRole: event.actorRole,
@@ -79,8 +97,30 @@ const worker = new Worker<AuditEvent>(
   },
 );
 
+/**
+ * Stamps the liveness key so `/audit` can tell "no activity yet" apart from
+ * "activity is queued and nothing is draining it".
+ *
+ * Best-effort by design: if Redis is briefly unhappy the heartbeat fails, the
+ * page shows a warning for a few seconds, and the next tick clears it. A
+ * heartbeat that could fail the worker would be a worse trade than a stale one.
+ */
+async function beat(): Promise<void> {
+  try {
+    await connection.set(AUDIT_HEARTBEAT_KEY, new Date().toISOString());
+  } catch (error) {
+    console.warn("[audit] could not write heartbeat", error);
+  }
+}
+
+const heartbeat = setInterval(() => void beat(), AUDIT_HEARTBEAT_INTERVAL_MS);
+// Do not hold the event loop open for the heartbeat on its own; the worker
+// connection keeps the process alive on purpose.
+heartbeat.unref?.();
+
 worker.on("ready", () => {
   console.log("🛡️  audit worker ready — listening for events");
+  void beat();
 });
 
 worker.on("failed", (job, error) => {
@@ -93,8 +133,19 @@ worker.on("error", (error) => {
 
 function shutdown(signal: string): void {
   console.log(`[audit] received ${signal}, closing worker...`);
-  void worker
-    .close()
+  clearInterval(heartbeat);
+
+  // Clear the liveness key so `/audit` reacts to a planned stop or a deploy
+  // immediately, rather than waiting out the staleness window. A hard kill
+  // cannot do this, which is exactly what that window is for.
+  //
+  // Assumes a single worker, which is what the deployment runs. If the worker
+  // were ever scaled out, one instance stopping would clear the key while its
+  // siblings are still beating, and the page would raise a false alarm.
+  void connection
+    .del(AUDIT_HEARTBEAT_KEY)
+    .catch(() => undefined)
+    .finally(() => worker.close())
     .finally(() => {
       void connection.disconnect();
     })

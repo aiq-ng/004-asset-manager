@@ -13,9 +13,15 @@
 // - `Asset.serialNumber` is stored trimmed, and "" is normalised to NULL so
 //   several serial-less bulk items do not collide on the unique constraint.
 // - `Staff.role` drives the permission matrix in src/lib/auth/permissions.ts.
-//   There is exactly one SUPERADMIN: the first account ever created, which only
-//   `pnpm auth:create-superadmin` can do. The service layer refuses to grant
-//   SUPERADMIN to anyone else, so the role is never handed out.
+//   There is exactly one SUPERADMIN, and nothing in the app can hand the role
+//   out: it is created once, by the `/setup` screen or
+//   `pnpm auth:create-superadmin`, both of which run without a session and
+//   neither of which will run twice. A partial unique index
+//   (`Staff_one_superadmin`) enforces the "at most one" part in the database,
+//   because the checks above it are a read followed by a write and cannot be
+//   atomic with each other. Prisma has no schema syntax for a partial index, so
+//   it lives in a migration and is unmanaged: decline any diff that proposes
+//   dropping it.
 // - `Staff.passwordHash` is NULL until a password is set, which locks the
 //   account out of login (seeded staff are created without credentials).
 // - `Staff.sessionVersion` makes stateless session cookies revocable: it is
@@ -65,7 +71,8 @@ model Asset {
   assetTypeId  String
   description  String
   brand        String?
-  unit         Int          @default(1)
+  /** Model number or short name, e.g. `Latitude 5440`. NULL when it has none. */
+  model        String?
   serialNumber String?      @unique
   imageKey     String?
   status       AssetStatus  @default(AVAILABLE)
@@ -79,6 +86,7 @@ model Asset {
   @@index([assetId])
   @@index([serialNumber])
   @@index([status])
+  @@index([brand])
 }
 
 model Department {

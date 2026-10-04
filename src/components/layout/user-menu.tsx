@@ -15,6 +15,12 @@ import type { StaffRole } from "@/generated/prisma/client";
 /**
  * Account menu.
  *
+ * Identity, role and sign-out — nothing else. There used to be an
+ * "Account & appearance" link to `/settings` here, left over from before
+ * `SidebarUserSection` moved that job into the sidebar switch; it was a second
+ * route to the same two things and the one most likely to rot, since the sidebar
+ * version is what anybody actually reaches for.
+ *
  * Sign-out posts a Server Action from inside the menu rather than navigating to
  * a route, because logging out bumps `sessionVersion` — it is a mutation, not a
  * page, and going through the action keeps one implementation of it.
@@ -61,11 +67,6 @@ export function UserMenu({
           {role}
         </Badge>
       </div>
-      <DropdownSeparator />
-      <DropdownItem href="/settings">
-        <Icons.User className="size-3.5" />
-        Account &amp; appearance
-      </DropdownItem>
       <DropdownSeparator />
       {/* A submit button inside the menu, so sign-out is one progressive-enhancement
           form rather than a click handler that only exists after hydration. */}

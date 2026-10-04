@@ -19,7 +19,7 @@ import { AssetImageManager } from "@/features/assets/asset-image-manager";
 import { AssetRetireControl } from "@/features/assets/asset-retire-control";
 import { AssignmentHistory, AssignmentPanel } from "@/features/assets/assignment-panel";
 import { getAsset, signStorageUrl } from "@/lib/services/assets";
-import { listStaff } from "@/lib/services/staff";
+import { listStaffOptions } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
@@ -54,21 +54,30 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
     })),
   );
 
+  // The most recent closed assignment, for the panel's "not currently assigned"
+  // card. Taken from the history rather than from `asset.assignment`, which is
+  // null exactly when there is nothing out — the two facts a reader wants are
+  // "who had it" and "who has it", and only one of them lives on that field.
+  //
+  // Flattened rather than passed through, because `find` does not narrow
+  // `dateReturned` on the row it returns and the panel only ever wants the
+  // three fields it displays.
+  const closed = history.find((entry) => entry.dateReturned !== null);
+  const lastReturn = closed?.dateReturned
+    ? {
+        dateReturned: closed.dateReturned,
+        staff: { name: closed.staff.name, department: closed.staff.department },
+        returnNote: closed.returnNote,
+      }
+    : null;
+
   // Candidates for the assign dialog, narrowed here by the same rules the
   // service enforces on write — an assigner is never offered themselves or an
   // admin. The panel stays a synchronous client component; hooks are illegal
   // in an async one.
   const staff = canAssign
-    ? listStaff({ page: 1, pageSize: 100 }).then((result) =>
-        result.items
-          .filter((person) => isAssignableTarget(actor, person))
-          .map((person) => ({
-            id: person.id,
-            name: person.name,
-            department: person.department,
-            email: person.email,
-            role: person.role,
-          })),
+    ? listStaffOptions().then((people) =>
+        people.filter((person) => isAssignableTarget(actor, person)),
       )
     : undefined;
 
@@ -133,10 +142,12 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
                   <DetailRow term="Brand">
                     {asset.brand ?? <span className="text-c54-text-muted">—</span>}
                   </DetailRow>
+                  <DetailRow term="Model">
+                    {asset.model ?? <span className="text-c54-text-muted">—</span>}
+                  </DetailRow>
                   <DetailRow term="Serial number">
                     {asset.serialNumber ?? <span className="text-c54-text-muted">—</span>}
                   </DetailRow>
-                  <DetailRow term="Units">{asset.unit}</DetailRow>
                   <DetailRow term="Registered">
                     {new Date(asset.createdAt).toLocaleDateString("en-GB", {
                       day: "2-digit",
@@ -193,6 +204,7 @@ export default async function AssetDetailPage({ params }: PageProps<"/assets/[as
         <div className="flex flex-col gap-c54-section">
           <AssignmentPanel
             assignment={asset.assignment}
+            lastReturn={lastReturn}
             canReturn={can(actor.role, "assignment:return")}
             canAssign={canAssign}
             assetId={asset.assetId}

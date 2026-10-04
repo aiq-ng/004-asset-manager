@@ -99,7 +99,6 @@ export default async function StaffDetailPage({ params }: PageProps<"/staff/[sta
                       <TableHeader className="w-40">Asset</TableHeader>
                       <TableHeader>Description</TableHeader>
                       <TableHeader className="w-32">Status</TableHeader>
-                      <TableHeader className="w-28">Units</TableHeader>
                     </TableRow>
                   </thead>
                   <TableBody>
@@ -114,7 +113,6 @@ export default async function StaffDetailPage({ params }: PageProps<"/staff/[sta
                         <TableCell>
                           <StatusBadge status={asset.status} />
                         </TableCell>
-                        <TableCell className="text-c54-xs">{asset.unit}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

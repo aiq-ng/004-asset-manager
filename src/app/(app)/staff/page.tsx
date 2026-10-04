@@ -126,7 +126,7 @@ async function StaffResults({
               <TableHeader>Department</TableHeader>
               <TableHeader>Email</TableHeader>
               <TableHeader className="w-40">Role</TableHeader>
-              <TableHeader className="w-32">Phone</TableHeader>
+              <TableHeader className="w-40 whitespace-nowrap">Phone</TableHeader>
               {canManage ? <TableHeader className="w-28" /> : null}
             </TableRow>
           </thead>
@@ -151,7 +151,13 @@ async function StaffResults({
                 <TableCell>
                   <StaffRoleBadge role={person.role} />
                 </TableCell>
-                <TableCell className="text-c54-xs text-c54-text-secondary">
+                {/* `whitespace-nowrap` because a phone number is one value, not
+                    prose: letting it wrap puts "912 345" under "+351" and makes
+                    two rows in the same column visually impossible to line up.
+                    `Table` scrolls horizontally when a column genuinely cannot
+                    fit, which is the better failure than a broken number.
+                    `tabular-nums` so the digits align down the column. */}
+                <TableCell className="text-c54-xs whitespace-nowrap tabular-nums text-c54-text-secondary">
                   {person.phone ?? <span className="text-c54-text-muted">—</span>}
                 </TableCell>
                 {canManage ? (

@@ -59,8 +59,8 @@ export function StaffDeleteControl({
         ) : null}
 
         <p className="text-c54-xs text-c54-text-secondary">
-          Deletes the account permanently. Assignment history survives — it is part of the
-          audit trail — but the person can no longer sign in or hold assets.
+          Deletes the account for good. The person can no longer sign in or hold assets.
+          Assignment history is kept for the audit trail.
         </p>
 
         <div>

@@ -2,6 +2,13 @@ import { cn } from "@/lib/utils/cn";
 
 export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger" | "info" | "inverse";
 
+/**
+ * A glyph from the `Icons` set. Typed structurally rather than as the concrete
+ * component so a caller can pass `Icons.Wrench` without this module importing
+ * `icons.tsx` and the two drifting apart.
+ */
+export type BadgeIcon = React.ComponentType<{ className?: string }>;
+
 const TONES: Record<BadgeTone, string> = {
   neutral: "bg-c54-bg-muted text-c54-text-secondary border-c54-border-default",
   accent: "bg-c54-bg-accent text-c54-text-accent border-c54-border-accent",
@@ -12,27 +19,30 @@ const TONES: Record<BadgeTone, string> = {
   inverse: "bg-c54-text-primary text-c54-bg-card border-transparent",
 };
 
-const DOT_TONES: Record<BadgeTone, string> = {
-  neutral: "bg-c54-text-muted",
-  accent: "bg-c54-text-accent",
-  success: "bg-c54-status-healthy",
-  warning: "bg-c54-text-warning",
-  danger: "bg-c54-action-danger",
-  info: "bg-c54-text-primary",
-  inverse: "bg-c54-bg-card",
-};
-
+/**
+ * Status pill.
+ *
+ * Takes an `icon` rather than rendering one of its own, because the useful
+ * glyph is not derivable from the tone: `danger` covers "sign in failed",
+ * "staff deleted" and "access denied", and those want a different picture. The
+ * caller knows which of the three it is, so the caller picks.
+ *
+ * This replaced a coloured dot. The dot was a tone restated in a smaller circle
+ * — it told you a pill was *severe* without telling you what it was about, and
+ * it carried no meaning at all in greyscale or with colour vision deficiency.
+ * The icon is chosen for meaning; the tone is still there for the fast sweep.
+ */
 export function Badge({
   tone = "neutral",
-  dot,
+  icon: Icon,
   size = "md",
   className,
   children,
   ...rest
 }: React.HTMLAttributes<HTMLSpanElement> & {
   tone?: BadgeTone;
-  /** Leading status dot — the fastest signal in a dense table. */
-  dot?: boolean;
+  /** Leading glyph. Sized to the pill and inherits its colour. */
+  icon?: BadgeIcon;
   size?: "sm" | "md";
 }) {
   return (
@@ -45,7 +55,9 @@ export function Badge({
       )}
       {...rest}
     >
-      {dot ? <span className={cn("size-1.5 rounded-c54-full", DOT_TONES[tone])} /> : null}
+      {/* `shrink-0` so the glyph is never the thing that gives way when a long
+          label needs the room. */}
+      {Icon ? <Icon className={cn("shrink-0", size === "sm" ? "size-3" : "size-3.5")} /> : null}
       {children}
     </span>
   );

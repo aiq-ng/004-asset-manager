@@ -10,12 +10,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Input, Textarea } from "@/components/ui/controls";
+import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
+import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
 import { BULK_ASSET_ENTRY_MAX } from "@/lib/validators/asset";
+
+const MAX_IMAGE_MB = IMAGE_UPLOAD_MAX_BYTES / (1024 * 1024);
 
 export interface AssetTypeOption {
   id: string;
@@ -28,6 +32,7 @@ interface Batch {
   assetType: string;
   name: string;
   brand: string;
+  model: string;
   quantity: number;
 }
 
@@ -54,7 +59,18 @@ function readDraft(): Draft | null {
     const parsed = JSON.parse(raw) as Partial<Draft>;
     if (!parsed.batch || !Array.isArray(parsed.serials)) return null;
     return {
-      batch: parsed.batch,
+      // Rebuilt field by field rather than passed through, because a draft
+      // written by an older build is missing whatever has been added since:
+      // `brand` arrived after the first release, `model` after that. Passing the
+      // parsed object straight through leaves those undefined, which is a value
+      // that submits as the string "undefined" rather than as empty.
+      batch: {
+        assetType: parsed.batch.assetType,
+        name: parsed.batch.name,
+        brand: parsed.batch.brand ?? "",
+        model: parsed.batch.model ?? "",
+        quantity: parsed.batch.quantity,
+      },
       serials: parsed.serials,
       saved: parsed.saved ?? {},
     };
@@ -98,11 +114,11 @@ function BulkAssetEntryDialog({
   // Two dispatches, both mounted for the life of the sheet. Which one the form
   // posts to is decided by the button, not by swapping components — the footer
   // button targets a form by id, so there is only ever one form to target.
-  const [singleState, singleAction] = useActionState(
+  const [singleState, singleAction, singlePending] = useActionState(
     createBulkAssetEntryAction,
     INITIAL_ACTION_STATE,
   );
-  const [batchState, batchAction] = useActionState(
+  const [batchState, batchAction, batchPending] = useActionState(
     submitBulkAssetEntryAction,
     INITIAL_ACTION_STATE,
   );
@@ -118,6 +134,48 @@ function BulkAssetEntryDialog({
   const [restored, setRestored] = useState(() => draft !== null);
 
   const serialRefs = useRef(new Map<number, HTMLInputElement>());
+
+  /**
+   * The batch's one photo, shared by every row.
+   *
+   * Held in a ref rather than in `draft`, and that is a deliberate gap: a `File`
+   * cannot be JSON-serialised into local storage, so putting it in the draft
+   * would either throw on every keystroke or silently drop it. The consequence
+   * is that an accidental close keeps the type, the name and the serials but
+   * loses the picture — which the hint under the picker now says out loud,
+   * because a photo that silently vanishes halfway through a twenty-item batch
+   * is worse than one that was never chosen.
+   */
+  const batchPhotoRef = useRef<File | null>(null);
+  const [batchPhotoName, setBatchPhotoName] = useState<string | null>(null);
+
+  /**
+   * The input inside the form that actually submits.
+   *
+   * The picker sits in the setup step, but setup is a client-side `onSubmit`
+   * that never talks to the server — the submissions that create assets are the
+   * ones on the serial form. So the file is mirrored into a real input there,
+   * which is what actually gets serialised into the `FormData`.
+   *
+   * Written from the form's own `onSubmit` rather than an effect, because that
+   * is the only ordering that is guaranteed: the handler runs before React reads
+   * the form, and React empties the form the moment the action returns — an
+   * effect would race that reset and lose the file on every save.
+   */
+  const serialFileRef = useRef<HTMLInputElement>(null);
+
+  function syncBatchPhoto() {
+    const input = serialFileRef.current;
+    if (!input) return;
+    // Cleared first so a batch whose photo was removed does not keep submitting
+    // the previous one.
+    input.value = "";
+    const file = batchPhotoRef.current;
+    if (!file) return;
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+  }
 
   useEffect(() => {
     try {
@@ -220,12 +278,14 @@ function BulkAssetEntryDialog({
     const assetType = String(form.get("assetType") ?? "").trim();
     const name = String(form.get("name") ?? "").trim();
     const brand = String(form.get("brand") ?? "").trim();
+    const model = String(form.get("model") ?? "").trim();
     const rawQuantity = String(form.get("quantity") ?? "").trim();
     const quantity = Number(rawQuantity);
 
     const errors: Record<string, string> = {};
     if (!assetType) errors.assetType = "Choose an asset type.";
     if (!name) errors.name = "Add a name.";
+    if (!brand) errors.brand = "Add a brand.";
     if (!rawQuantity || !Number.isInteger(quantity) || quantity < 1) {
       errors.quantity = "Enter how many items you are entering.";
     } else if (quantity > BULK_ASSET_ENTRY_MAX) {
@@ -239,7 +299,7 @@ function BulkAssetEntryDialog({
     setConsumedBatch(null);
     setRestored(false);
     setDraft({
-      batch: { assetType, name, brand, quantity },
+      batch: { assetType, name, brand, model, quantity },
       serials: Array.from({ length: quantity }, () => ""),
       saved: {},
     });
@@ -274,6 +334,15 @@ function BulkAssetEntryDialog({
 
   const title = !batch ? "Register in bulk" : complete ? "All registered" : "Register in bulk";
 
+  // Whichever action the current button posts to is the one whose pending state
+  // the sheet cares about; the other form is not being submitted and its state is
+  // idle. Both footers read this. See `SubmitButton` for why it cannot be
+  // `useFormStatus` — the footer is outside the form.
+  //
+  // The setup step is deliberately absent: it is a client-side `onSubmit` that
+  // reads the form and calls `setDraft`, with no round trip to wait for.
+  const pending = !batch ? false : submitMode ? batchPending : singlePending;
+
   return (
     <Dialog
       open
@@ -285,6 +354,9 @@ function BulkAssetEntryDialog({
           ? "Describe the items once, then enter each one's serial number."
           : "Enter the serials one by one, or fill the column and submit it at once."
       }
+      // Not while the setup step is running — there is nothing in flight then, and
+      // locking the sheet would be locking it against a click that already landed.
+      busy={pending}
       footer={
         !batch ? (
           <>
@@ -294,7 +366,10 @@ function BulkAssetEntryDialog({
               </Button>
             ) : null}
             <DialogCancelButton />
-            <SubmitButton form="bulk-asset-setup" pendingLabel="Starting…">
+            {/* No `pendingLabel`: the setup step is a client-side `onSubmit` that
+                reads the form and calls `setDraft`. There is no round trip to wait
+                for, so a spinner here would be a lie about work in progress. */}
+            <SubmitButton form="bulk-asset-setup" pending={pending}>
               Start entering
             </SubmitButton>
           </>
@@ -302,13 +377,14 @@ function BulkAssetEntryDialog({
           <>
             <DialogCancelButton />
             {submitMode ? (
-              <SubmitButton form="bulk-asset-form" pendingLabel="Registering…">
+              <SubmitButton form="bulk-asset-form" pendingLabel="Registering…" pending={pending}>
                 Submit {unsavedSerials.length} item{unsavedSerials.length === 1 ? "" : "s"}
               </SubmitButton>
             ) : (
               <SubmitButton
                 form="bulk-asset-form"
                 pendingLabel="Saving…"
+                pending={pending}
                 disabled={!currentSerial}
               >
                 Save and next
@@ -338,14 +414,20 @@ function BulkAssetEntryDialog({
             required
           >
             {(field) => (
-              <Select {...field} id={field.id} name="assetType" invalid={field.invalid} defaultValue="">
-                <option value="">Choose a type…</option>
-                {assetTypes.map((type) => (
-                  <option key={type.id} value={type.code}>
-                    {type.name} ({type.code})
-                  </option>
-                ))}
-              </Select>
+              <EntitySelect
+                {...field}
+                id={field.id}
+                name="assetType"
+                invalid={field.invalid}
+                defaultValue=""
+                options={assetTypes.map((type) => ({
+                  value: type.code,
+                  label: `${type.name} (${type.code})`,
+                  searchKeys: [type.code],
+                }))}
+                placeholder="Choose a type…"
+                searchPlaceholder="Search types or codes…"
+              />
             )}
           </Field>
 
@@ -370,7 +452,8 @@ function BulkAssetEntryDialog({
             label="Brand"
             htmlFor="bulk-asset-brand"
             error={setupErrors.brand}
-            hint={'Optional. Composes the name as "Name (Brand)".'}
+            hint="Who made them. Shared by every item in the batch."
+            required
           >
             {(field) => (
               <Input
@@ -378,6 +461,22 @@ function BulkAssetEntryDialog({
                 id={field.id}
                 name="brand"
                 placeholder="Dell, LG, Samsung…"
+              />
+            )}
+          </Field>
+
+          <Field
+            label="Model"
+            htmlFor="bulk-asset-model"
+            error={setupErrors.model}
+            hint="Optional. Shared by every item in the batch."
+          >
+            {(field) => (
+              <Input
+                {...field}
+                id={field.id}
+                name="model"
+                placeholder="U2422H, 27UP850…"
               />
             )}
           </Field>
@@ -408,6 +507,41 @@ function BulkAssetEntryDialog({
             Each item becomes its own asset with its own id and label, so every one of
             them can be tracked and assigned separately.
           </p>
+
+          {/* One picture for the batch, because a batch is one kind of item. A
+              per-row picker would mean twenty uploads to describe twenty
+              identical monitors. */}
+          <div className="flex flex-col gap-c54-1">
+            <label
+              htmlFor="bulk-asset-photo"
+              className="block text-c54-xs font-c54-medium text-c54-text-primary"
+            >
+              Photo
+            </label>
+            <label
+              htmlFor="bulk-asset-photo"
+              className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary"
+            >
+              <Icons.Upload className="size-3.5" />
+              {batchPhotoName ?? "Choose a photo for the whole batch (optional)"}
+              <input
+                id="bulk-asset-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  batchPhotoRef.current = file;
+                  setBatchPhotoName(file ? file.name : null);
+                }}
+              />
+            </label>
+            <p className="text-c54-2xs text-c54-text-muted">
+              JPEG, PNG or WebP, up to {MAX_IMAGE_MB} MB. Applied to every item registered
+              from this batch. Not saved with the draft, so a batch resumed after closing
+              the sheet needs the photo picked again.
+            </p>
+          </div>
         </form>
       ) : null}
 
@@ -423,8 +557,16 @@ function BulkAssetEntryDialog({
               </p>
             </div>
             <p className="mt-c54-1 text-c54-sm text-c54-text-primary">
-              {batch.brand ? `${batch.name} (${batch.brand})` : batch.name}
+              {/* Just the name, as typed. Brand and model have their own columns
+                  and their own fields on the edit sheet; folding them into the
+                  summary is what used to make them show up twice. */}
+              {batch.name}
             </p>
+            {batchPhotoName ? (
+              <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
+                Photo applied to every item: {batchPhotoName}
+              </p>
+            ) : null}
             <div
               className="mt-c54-3 h-1 w-full overflow-hidden rounded-full bg-c54-bg-muted"
               role="progressbar"
@@ -453,7 +595,7 @@ function BulkAssetEntryDialog({
               <ul className="mt-c54-1 flex flex-col gap-c54-1">
                 {batchResult.skipped.map((row) => (
                   <li key={row.serial} className="font-mono text-c54-xs">
-                    {row.serial} — {row.reason}
+                    {row.serial} ({row.reason})
                   </li>
                 ))}
               </ul>
@@ -473,11 +615,26 @@ function BulkAssetEntryDialog({
           <form
             id="bulk-asset-form"
             action={submitMode ? batchAction : singleAction}
+            onSubmit={syncBatchPhoto}
             className="flex flex-col gap-c54-3"
           >
+            {/* Carries the batch photo. `syncBatchPhoto` fills it from the stash on
+                every submit, because React empties the form the moment the action
+                returns. Left empty when no photo was chosen, which the action
+                reads as "no image" rather than an empty upload. */}
+            <input
+              ref={serialFileRef}
+              type="file"
+              name="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
             <input type="hidden" name="assetType" value={batch.assetType} />
             <input type="hidden" name="name" value={batch.name} />
             <input type="hidden" name="brand" value={batch.brand} />
+            <input type="hidden" name="model" value={batch.model} />
             {submitMode ? (
               unsavedSerials.map((serial, index) => (
                 <input key={index} type="hidden" name="serials" value={serial} />
@@ -521,7 +678,7 @@ function BulkAssetEntryDialog({
                         event.preventDefault();
                         focusNext(index);
                       }}
-                      placeholder="Serial number, or leave blank to skip"
+                      placeholder="Serial number"
                       aria-label={`Serial number for item ${index + 1}`}
                       autoComplete="off"
                       spellCheck={false}
@@ -536,7 +693,7 @@ function BulkAssetEntryDialog({
           <div className="flex flex-wrap items-center justify-between gap-c54-2 border-t border-c54-border-default pt-c54-3">
             <p className="text-c54-2xs text-c54-text-muted">
               {allFilled
-                ? `All ${total} serials are in — submit them together, or save one at a time.`
+                ? `All ${total} serials are in. Submit them together, or save one at a time.`
                 : `${unsavedSerials.length} of ${total} filled in. Progress is saved in this browser.`}
             </p>
             <Button variant="ghost" size="sm" onClick={startOver}>
@@ -558,7 +715,7 @@ function BulkAssetEntryDialog({
               <ul className="mt-c54-1 flex flex-col gap-c54-1">
                 {batchResult.skipped.map((row) => (
                   <li key={row.serial} className="font-mono text-c54-xs">
-                    {row.serial} — {row.reason}
+                    {row.serial} ({row.reason})
                   </li>
                 ))}
               </ul>

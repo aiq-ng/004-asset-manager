@@ -19,7 +19,29 @@ export const listAssetsQuerySchema = paginationSchema.extend({
   status: assetStatusSchema.optional(),
   /** Staff id: only assets currently assigned to that person. */
   assignedTo: z.string().trim().min(1).max(64).optional(),
+  /**
+   * Exact brand or model, from the filter dropdowns. Equality rather than
+   * `contains`: these come from values that already exist on the register, so
+   * there is nothing to fuzzy-match against and a partial match would only
+   * produce surprising near-misses ("Del" matching "Dell" and "Delsey").
+   */
+  brand: z.string().trim().min(1).max(100).optional(),
+  model: z.string().trim().min(1).max(100).optional(),
 });
+
+/** Required on registration: without a brand the item cannot be identified. */
+const requiredBrandSchema = z
+  .string()
+  .trim()
+  .min(1, "brand is required")
+  .max(100, "brand must be <= 100 characters");
+
+/** Required on registration: the serial is what makes the item findable again. */
+const requiredSerialSchema = z
+  .string()
+  .trim()
+  .min(1, "serialNumber is required")
+  .max(120, "serial must be <= 120 characters");
 
 export const createAssetSchema = z.object({
   /** Asset type code (LAP) or id. */
@@ -29,26 +51,19 @@ export const createAssetSchema = z.object({
     .trim()
     .min(1, "name is required")
     .max(500, "name must be <= 500 characters"),
+  brand: requiredBrandSchema,
   /** Optional; "" and whitespace are stored as NULL. */
-  brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
-  unit: z.coerce
-    .number()
-    .int("unit must be an integer")
-    .min(1, "unit must be >= 1")
-    .default(1),
-  /** Optional; "" and whitespace are stored as NULL. */
-  serialNumber: optionalTrimmedString.optional(),
+  model: z.string().trim().max(100, "model must be <= 100 characters").nullish(),
+  serialNumber: requiredSerialSchema,
   status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
 });
 
 /**
  * One row of a batch register: a single physical item being entered.
  *
- * Deliberately has no `unit` field. In this flow the quantity the person typed
- * up front is a *count of rows to enter*, not a per-row quantity — so every asset
- * created this way is one item and stores `unit: 1`. Accepting `unit` here would
- * let a client set it to something the sheet never asked for, and `.strict()`
- * turns that into a visible 400 instead of a value silently dropped on the floor.
+ * Same shape as `createAssetSchema`, not a reduced copy of it. There is no `unit`
+ * field anywhere in this app: one row is one physical item, so the quantity typed
+ * up front is a count of rows to enter, never a per-row count.
  *
  * `serialNumber` is the only thing that genuinely varies between rows of the same
  * batch, which is why each save carries its own.
@@ -58,10 +73,16 @@ export const bulkAssetEntrySchema = z
     /** Asset type code (LAP) or id. Shared by every row in the batch. */
     assetType: z.string().trim().min(1, "assetType is required").max(64),
     name: z.string().trim().min(1, "name is required").max(500, "name must be <= 500 characters"),
+    brand: requiredBrandSchema,
     /** Optional; "" and whitespace are stored as NULL. */
-    brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
-    /** Optional; "" and whitespace are stored as NULL. */
-    serialNumber: optionalTrimmedString.optional(),
+    model: z.string().trim().max(100, "model must be <= 100 characters").nullish(),
+    /**
+     * Required, because saving a row individually means saving *that* item: the
+     * sheet's "Save and next" is disabled until the row has a serial. A row
+     * with no serial is skipped rather than refused, which is the batch
+     * submission's business, not this one's.
+     */
+    serialNumber: requiredSerialSchema,
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
   })
   .strict();
@@ -87,8 +108,9 @@ export const bulkAssetSubmitSchema = z
       .trim()
       .min(1, "name is required")
       .max(500, "name must be <= 500 characters"),
+    brand: requiredBrandSchema,
     /** Optional; "" and whitespace are stored as NULL. */
-    brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
+    model: z.string().trim().max(100, "model must be <= 100 characters").nullish(),
     /** In the order they should be created, so asset ids run down the column. */
     serials: z
       .array(z.string().trim().max(120, "serial must be <= 120 characters"))
@@ -108,13 +130,14 @@ export const updateAssetSchema = z
       .max(500, "name must be <= 500 characters")
       .optional(),
     brand: z.string().trim().max(100, "brand must be <= 100 characters").nullish(),
-    unit: z.coerce.number().int("unit must be an integer").min(1, "unit must be >= 1").optional(),
+  /** Optional; "" and whitespace are stored as NULL. */
+  model: z.string().trim().max(100, "model must be <= 100 characters").nullish(),
     serialNumber: optionalTrimmedString.optional(),
     /** ASSIGMED is reserved: status flips through the assignments endpoints. */
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: "Provide at least one of: name, brand, unit, serialNumber, status",
+    message: "Provide at least one of: name, brand, model, serialNumber, status",
   });
 
 /**
@@ -125,6 +148,29 @@ export const updateAssetSchema = z
 export const updateAssetStatusSchema = z
   .object({
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]),
+  })
+  .strict();
+
+/**
+ * What an ASSIGNER may set through the status-only path.
+ *
+ * Narrower than `updateAssetStatusSchema` on purpose, and the distinction is not
+ * cosmetic. Retiring is a `asset:manage` operation — the matrix puts CRUD and
+ * retire together at ADMIN — while flagging something broken and putting it back
+ * in the pool is the everyday work an ASSIGNER does. Letting the wider schema
+ * through on the assigner path meant `{"status":"RETIRED"}` retired an asset
+ * through an endpoint the UI never offers it on: the detail page passes
+ * `canChangeStatus={canManage}`, so the control is ADMIN-only, but the route and
+ * the Server Action both admitted any ASSIGNER and the permission matrix never
+ * got a say.
+ *
+ * Declared as a second schema rather than a runtime check so the refusal is a
+ * validation error on the one field it concerns, instead of a 403 that says
+ * nothing about which value was the problem.
+ */
+export const assignerAssetStatusSchema = z
+  .object({
+    status: z.enum(["AVAILABLE", "UNDER_REPAIR"]),
   })
   .strict();
 

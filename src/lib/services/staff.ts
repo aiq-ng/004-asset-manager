@@ -1,4 +1,5 @@
-import type { Prisma, StaffRole } from "@/generated/prisma/client";
+import { Prisma, StaffRole } from "@/generated/prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { AUDIT_ACTIONS, diffFields } from "@/lib/audit/events";
 import { recordAudit } from "@/lib/audit/context";
@@ -14,7 +15,6 @@ export interface CurrentAssetDto {
   assetId: string;
   description: string;
   status: string;
-  unit: number;
 }
 
 /**
@@ -45,7 +45,6 @@ function toDetail(staff: StaffDetailRecord): StaffDetailDto {
     assetId: asset.assetId,
     description: asset.description,
     status: asset.status,
-    unit: asset.unit,
   });
 
   return {
@@ -85,7 +84,6 @@ const staffDetailSelect = {
           assetId: true,
           description: true,
           status: true,
-          unit: true,
           assetType: { select: { id: true, name: true, code: true } },
         },
       },
@@ -128,6 +126,54 @@ export async function listStaff(
   ]);
 
   return { items: rows.map(toStaffDto), total, page: query.page, pageSize: query.pageSize };
+}
+
+/** One member of staff as a picker's option: enough to list and to search. */
+export interface StaffOptionDto {
+  id: string;
+  name: string;
+  /** The department's name, flattened out of the relation as `StaffDto` does. */
+  department: string;
+  /** Searched by the pickers as well as listed, so people can be found by it. */
+  email: string;
+  role: StaffRole;
+}
+
+/**
+ * Every member of staff, for the controls that offer them as options.
+ *
+ * Deliberately not `listStaff`. That one backs the paginated register at
+ * `/staff`, where a page of rows is the whole point and `pageSize` is capped by
+ * `PAGINATION_MAX_PAGE_SIZE`. A picker has no pages: it has a search box and a
+ * virtualised list, so a cap buys nothing and costs reachability — at a hundred
+ * staff the cap stopped mattering, and past it everyone alphabetically after the
+ * hundredth was silently unassignable and unfilterable, with nothing on screen
+ * to say so.
+ *
+ * The honest limit: this ships the whole company to the browser, which is the
+ * right trade in the thousands and the wrong one in the tens of thousands. At
+ * that size the picker has to ask the server as you type instead, and this
+ * function is the seam where that query would go.
+ */
+export async function listStaffOptions(): Promise<StaffOptionDto[]> {
+  const rows = await prisma.staff.findMany({
+    select: {
+      id: true,
+      name: true,
+      department: { select: { name: true } },
+      email: true,
+      role: true,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    department: row.department.name,
+    email: row.email,
+    role: row.role,
+  }));
 }
 
 export async function getStaff(id: string): Promise<StaffDetailDto> {

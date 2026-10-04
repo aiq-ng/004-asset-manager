@@ -11,11 +11,12 @@ import {
   recordAudit,
   runWithRequestContext,
 } from "@/lib/audit/context";
-import { installAuditPublisher } from "@/lib/audit/queue";
 import { ApiError, fromPrismaError } from "@/lib/errors";
 
-// Installing the publisher once per process keeps BullMQ out of every service.
-installAuditPublisher();
+// Installs the audit publisher for this module instance, keeping BullMQ out of
+// every service. Imported for the side effect; see `lib/audit/install.ts` for why
+// the Server Action path has to do the same.
+import "@/lib/audit/install";
 
 export interface PaginationMeta {
   page: number;

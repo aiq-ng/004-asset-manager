@@ -6,7 +6,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { getActor } from "@/lib/auth/actor";
-import { clientIpFrom, runWithRequestContext } from "@/lib/audit/context";
+import { clientIpFrom, recordAudit, runWithRequestContext } from "@/lib/audit/context";
 import { ApiError } from "@/lib/errors";
 import { defineAction } from "@/lib/server/define-action";
 import {
@@ -16,13 +16,20 @@ import {
   requestPasswordReset,
   resetPassword,
 } from "@/lib/services/auth";
+import { bootstrapSuperadmin } from "@/lib/services/staff-bootstrap";
 import {
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   resetPasswordSchema,
 } from "@/lib/validators/auth";
-import { formDataToObject, toFieldErrors, type ActionState } from "@/lib/server/action-state";
+import { bootstrapSuperadminSchema } from "@/lib/validators/staff";
+import {
+  formDataToObject,
+  submittedValues,
+  toFieldErrors,
+  type ActionState,
+} from "@/lib/server/action-state";
 
 /**
  * Sign-in and sign-out — the `"use server"` boundary the login form imports.
@@ -42,7 +49,7 @@ export async function loginAction(
   const parsed = loginSchema.safeParse(formDataToObject(formData));
 
   if (!parsed.success) {
-    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error) };
+    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error), values: submittedValues(formData) };
   }
 
   try {
@@ -56,7 +63,15 @@ export async function loginAction(
     unstable_rethrow(error);
 
     if (error instanceof ApiError) {
-      return { ok: false, error: error.message, code: error.code };
+      return {
+        ok: false,
+        error: error.message,
+        code: error.code,
+        // Echoed here as well as on the validation branch: a wrong password is
+        // the common failure, not a rare one, and it must not cost the address
+        // it was mistyped against.
+        values: submittedValues(formData),
+      };
     }
 
     console.error("[action] login failed", error);
@@ -91,7 +106,7 @@ export async function forgotPasswordAction(
   const parsed = forgotPasswordSchema.safeParse(formDataToObject(formData));
 
   if (!parsed.success) {
-    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error) };
+    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error), values: submittedValues(formData) };
   }
 
   try {
@@ -102,7 +117,7 @@ export async function forgotPasswordAction(
     unstable_rethrow(error);
 
     if (error instanceof ApiError) {
-      return { ok: false, error: error.message, code: error.code };
+      return { ok: false, error: error.message, code: error.code, values: submittedValues(formData) };
     }
 
     console.error("[action] forgot password failed", error);
@@ -151,7 +166,7 @@ export async function resetPasswordAction(
   const parsed = resetPasswordSchema.safeParse(formDataToObject(formData));
 
   if (!parsed.success) {
-    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error) };
+    return { ok: false, error: "Please check the highlighted fields.", fieldErrors: toFieldErrors(parsed.error), values: submittedValues(formData) };
   }
 
   try {
@@ -183,6 +198,71 @@ export async function logoutAction(): Promise<void> {
     );
   }
 
+  redirect("/login");
+}
+
+/**
+ * Creates the SUPERADMIN on a fresh install, from the app's own setup screen.
+ *
+ * Cannot use `defineAction`, for the same reason `loginAction` cannot: there is
+ * no actor yet — nobody has ever signed in — so the factory's permission check
+ * and actor lookup have nothing to work from. That is not a hole to guard here
+ * but the definition of the endpoint: it is reachable *only* while the database
+ * holds no superadmin, and the moment one exists the service refuses it.
+ *
+ * The redirect matters as much as the write. Landing on /login with the account
+ * now able to authenticate is the honest end of the flow; staying put would
+ * leave a setup form in front of somebody whose superadmin already exists.
+ */
+export async function bootstrapSuperadminAction(
+  _previousState: ActionState<undefined>,
+  formData: FormData,
+): Promise<ActionState<undefined>> {
+  const parsed = bootstrapSuperadminSchema.safeParse(formDataToObject(formData));
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Please correct the highlighted fields.",
+      fieldErrors: toFieldErrors(parsed.error),
+      values: submittedValues(formData),
+    };
+  }
+
+  // `confirmPassword` is only ever a comparison, never a column: dropping it
+  // here means the value the operator typed to confirm cannot be forwarded by
+  // accident, and keeps the object handed to the service to exactly the fields it
+  // is shaped for.
+  const { confirmPassword, ...input } = parsed.data;
+  void confirmPassword;
+
+  try {
+    // `recordAudit` is injected rather than called from inside the service
+    // because the bootstrap service has to stay importable from plain `tsx`
+    // (the CLI runs there, and `server-only` throws). Passing the recorder here
+    // is also what makes the row land on the audit trail: `recordAudit` reads
+    // the actor, address and route from the context this call publishes.
+    await runWithRequestContext(await auditContext("action:bootstrapSuperadmin", null), () =>
+      bootstrapSuperadmin(input, { record: recordAudit }),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof ApiError) {
+      return {
+        ok: false,
+        error: error.message,
+        code: error.code,
+        values: submittedValues(formData),
+      };
+    }
+
+    console.error("[action] bootstrap superadmin failed", error);
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+
+  // Outside the catch: `redirect()` signals by throwing, and a catch that
+  // swallows it would report a successful setup as a failure.
   redirect("/login");
 }
 

@@ -104,7 +104,7 @@ export function SidebarUserSection({
         title="Change password"
         description={actor.email}
       >
-        <ChangePasswordForm email={actor.email} hasPassword={hasPassword} />
+        <ChangePasswordForm email={actor.email} hasPassword={hasPassword} closeOnSuccess />
       </Dialog>
 
       <Dialog
@@ -125,10 +125,10 @@ export function SidebarUserSection({
           </DetailRow>
           <DetailRow term="Password">
             {hasPassword ? (
-              "Set — you can change it above"
+              "Set. Change it above."
             ) : (
               <span className="text-c54-text-warning">
-                Not set — set one above to be able to sign in again later
+                Not set. Set one above to sign in again later.
               </span>
             )}
           </DetailRow>

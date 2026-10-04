@@ -53,8 +53,8 @@ export default async function ResetPasswordPage({
             Didn&apos;t request this?{" "}
             <Link href="/login" className="text-c54-action-primary hover:underline">
               Back to sign in
-            </Link>{" "}
-            — your password is unchanged.
+            </Link>
+            . Your password stays as it was.
           </p>
         </div>
       </main>

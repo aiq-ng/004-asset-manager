@@ -1,7 +1,7 @@
 "use client";
 
 import { Field } from "@/components/ui/field";
-import { Select } from "@/components/ui/controls";
+import { EntitySelect } from "@/components/ui/entity-select";
 
 export interface DepartmentOption {
   id: string;
@@ -20,6 +20,11 @@ export interface DepartmentOption {
  * When there are no departments yet the control is disabled and says so, pointing
  * at where they are created, rather than rendering an empty box that submits
  * nothing and fails validation with a message nobody can act on.
+ *
+ * `EntitySelect` rather than a bare `<select>` because the department list is the
+ * one here that grows without limit: a handful on a small site, hundreds on a
+ * large one, and the picker has to stay usable at both sizes. It decides which
+ * control to render from the number of options.
  */
 export function DepartmentSelect({
   departments,
@@ -51,21 +56,20 @@ export function DepartmentSelect({
       required
     >
       {(field) => (
-        <Select
+        <EntitySelect
           {...field}
           id={id}
           name={name}
+          options={departments.map((department) => ({
+            value: department.id,
+            label: department.name,
+          }))}
+          placeholder="Choose a department…"
+          searchPlaceholder="Search departments…"
           defaultValue={defaultValue ?? ""}
           disabled={disabled || empty}
           invalid={Boolean(error)}
-        >
-          <option value="">Choose a department…</option>
-          {departments.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.name}
-            </option>
-          ))}
-        </Select>
+        />
       )}
     </Field>
   );
