@@ -86,6 +86,16 @@ return notes or photos, no database id, and no controls. An unknown asset number
 is a `404`; a signed-in visitor gets the full detail page instead. Every other
 page, and every API endpoint, still requires a session.
 
+**Registering in bulk from a spreadsheet:** the bulk sheet can read serial numbers
+out of a CSV or Excel file — first column, one per row — instead of asking for
+them one at a time, which is the tedious part of entering twenty identical
+monitors. The file is parsed in the browser, never uploaded, and the serials land
+in the same editable column as the typed ones, so the dedupe, the skip reasons
+and the draft all behave exactly as they do for a typed batch. Only the serials
+come from the file: a batch is still one kind of item, because asset ids are
+allocated per type. See `docs/API.md` for the rules and the note on why `xlsx` is
+installed from SheetJS's own CDN rather than npm.
+
 ## Superadmin bootstrap
 
 The app cannot be signed into until a SUPERADMIN exists, so every entry point checks for one and sends an unbootstrapped install to `/setup`, where the account is created in the browser. The `/setup` screen is **self-sealing**: once a superadmin exists it redirects away and its action refuses, so there is never a state where both the form and a working superadmin are live.

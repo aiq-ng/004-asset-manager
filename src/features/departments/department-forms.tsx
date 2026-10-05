@@ -8,6 +8,7 @@ import {
   deleteDepartmentAction,
   updateDepartmentAction,
 } from "@/features/departments/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
@@ -73,9 +74,12 @@ function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function DepartmentCreateButton() {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+export function DepartmentCreateButton({ openInitially = false }: { openInitially?: boolean }) {
+  const [open, setOpen] = useState(openInitially);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>

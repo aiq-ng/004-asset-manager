@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -36,6 +45,9 @@ type Phase = "closed" | "opening" | "open" | "closing";
  * that guarantees it always goes away.
  */
 const EXIT_TIMEOUT_MS = 600;
+
+/** No-op subscription for the hydration flag below: nothing ever changes. */
+const emptySubscribe = () => () => undefined;
 
 /**
  * The *deferred* close: asks the panel to leave, then runs the caller's `onClose`
@@ -152,6 +164,28 @@ export function Dialog({
   const descriptionId = useId();
   const [phase, setPhase] = useState<Phase>(open ? "open" : "closed");
 
+  // False on the server and on the client's very first render, true after
+  // hydration. A dialog reached by a deep link — `/staff?new` — is `open` from
+  // the first render, and `createPortal` has no `document` to attach to on the
+  // server, which threw and dropped the whole route into client-only rendering.
+  //
+  // Gating on this rather than on `typeof document` keeps the two renders
+  // identical: the server emits no dialog *and* the client's first pass emits
+  // none, so there is no hydration mismatch to report — which is exactly what the
+  // `phase === "closed"` note below is about, and why that shortcut was not safe
+  // to reuse here. Dialogs opened by a click are unaffected: hydration has long
+  // finished by the time anybody can click.
+  //
+  // `useSyncExternalStore` rather than `useState` + an effect: this is React's
+  // own "am I hydrated yet" primitive, and it reads the flag during render
+  // instead of setting state from one, which the compiler rightly rejects as a
+  // cascading render.
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
+
   // Both of these are read from effects and event handlers, never during render,
   // and callers routinely pass an inline arrow. Holding them in refs keeps them
   // out of effect dependency lists that would otherwise re-run on every render.
@@ -237,7 +271,12 @@ export function Dialog({
     // `closed`: the portal is about to disappear, so take the element out of the
     // top layer explicitly rather than leaving the UA to notice the removal.
     if (node.open) node.close();
-  }, [phase]);
+    // `mounted` is in the dependency list because of the deep-link case: until
+    // it flips, this effect runs with `ref.current` null and returns early, and
+    // the `<dialog>` only appears on the render after that. Without it here the
+    // element mounted but was never shown — a dialog present in the DOM, closed,
+    // and therefore invisible and inert.
+  }, [phase, mounted]);
 
   // ESC and the platform's own light-dismiss both arrive as `cancel`. The default
   // would close the element immediately and skip the exit animation, so it is
@@ -279,7 +318,11 @@ export function Dialog({
   // would make the server render an empty tree while the client renders a portal
   // — a guaranteed hydration mismatch, and one per row on a list page, because
   // the error is reported for every dialog on the page.
-  if (phase === "closed") return null;
+  //
+  // `mounted` guards the complementary case: a dialog that arrives *already*
+  // open from a deep link, where both renders have to agree and neither can
+  // portal yet.
+  if (phase === "closed" || !mounted) return null;
 
   const isSheet = side === "right";
   const closing = phase === "closing";

@@ -368,6 +368,31 @@ The photo is **not** accepted here: an uploaded image is a `multipart/form-data`
 part, and this route parses JSON. The bulk sheet posts its one batch photo
 through the Server Action instead.
 
+### Populating `serials` from a spreadsheet
+
+The register's bulk sheet can read the serials out of a file instead of asking
+for them one at a time: pick a CSV or Excel file, and the first column — one
+serial per row — becomes the batch's `serials`, with the count derived from it.
+Everything after that is this endpoint, unchanged: the same within-batch
+dedupe, the same `skipped` reasons, the same per-type id allocation.
+
+This is a **UI-only** convenience and adds no API surface. Nothing is uploaded:
+the file is parsed in the browser and the result travels as the ordinary
+`serials` array, so this endpoint knows nothing about spreadsheets.
+
+| Behaviour                | Rule                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Formats                  | `.csv`, `.tsv`, `.xlsx`, `.xls`; up to 5 MB                            |
+| Column read              | The first column of the first sheet, one serial per row                |
+| Heading row              | A first cell reading `serial`, `serial number`, `s/n`, `sn`, … is skipped |
+| Within-file duplicates   | Folded case-insensitively and reported as skipped rows                 |
+| Row cap                  | `BULK_ASSET_ENTRY_MAX` (500); the overflow is reported, not silently cut |
+| Bad file                 | An inline message naming the problem; nothing is filled in             |
+
+The cap and the dedupe are enforced here as well as on submit. The import is a
+way of typing faster, not a second way in: a serial already on the register
+still comes back in `skipped` with `Already on the register`.
+
 ### `GET /api/assets/[id]`
 
 *Requires: Signed in.*
@@ -1055,5 +1080,31 @@ curl -b cookies.txt 'http://localhost:3000/api/assignments?active=true&staffId=c
 | `SESSION_SECRET`                | HS256 session-cookie signing key, ≥ 32 chars                  |
 | `REDIS_URL`                     | Audit queue (default `redis://localhost:6379`)                |
 | `AUDIT_REDIS_PREFIX`            | Optional key namespace, so several environments can share one Redis |
+
+### A note on the `xlsx` dependency
+
+Spreadsheet import reads `.xlsx` through SheetJS, and it is deliberately **not**
+the version npm serves:
+
+```json
+"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+```
+
+The copy on the npm registry is stuck at `0.18.5` and carries known
+high-severity prototype-pollution advisories with no fix published there —
+SheetJS states the registry is out of date and that their CDN is authoritative
+for the fixed releases (resolved in `0.19.3`). Installing the tarball through
+the package manager rather than a runtime `<script>` keeps the library inside
+the bundle and integrity-pinned in `pnpm-lock.yaml`, with no CDN dependency at
+run time.
+
+To upgrade, install a newer tarball from `cdn.sheetjs.com`. SheetJS also
+recommends *vendoring* the tarball into the repo (they publish
+`vendor/` instructions) to decouple installs from their infrastructure; that is
+not done here yet, so `pnpm install` needs `cdn.sheetjs.com` reachable.
+
+The library is only ever reached through a dynamic import behind
+`features/assets/serial-import-xlsx.ts`, and CSV is parsed by hand without it,
+so a CSV-only import never downloads it at all.
 
 Everything is validated with Zod in `src/lib/env.ts`, so the process fails fast with a readable message when a variable is missing.

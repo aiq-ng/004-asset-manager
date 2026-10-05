@@ -4,6 +4,7 @@ import { useActionState, useCallback, useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 
 import { createAssetTypeAction, updateAssetTypeAction } from "@/features/asset-types/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -159,11 +160,14 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
  * Mounted on open only, so dismissing and reopening starts from a clean action
  * state instead of leaving the previous submission's errors on screen.
  */
-export function AssetTypeCreateButton() {
-  const [open, setOpen] = useState(false);
+export function AssetTypeCreateButton({ openInitially = false }: { openInitially?: boolean }) {
+  const [open, setOpen] = useState(openInitially);
   // Stable, so the close-on-success effect inside the sheet only reacts to the
   // state actually changing rather than to a fresh arrow on every render.
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>

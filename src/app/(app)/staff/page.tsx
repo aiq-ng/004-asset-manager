@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { FilterBar } from "@/features/shared/filter-bar";
 import type { DepartmentOption } from "@/features/departments/department-select";
 import { StaffCreateButton, StaffEditButton } from "@/features/staff/staff-forms";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { rolePresentation, STAFF_ROLES } from "@/features/staff/role-presentation";
 import { StaffRoleBadge } from "@/features/staff/staff-role-badge";
 import { listDepartmentOptions } from "@/lib/services/departments";
@@ -25,8 +26,12 @@ import { listStaffQuerySchema } from "@/lib/validators/staff";
 /** Staff directory. Reads are open to any signed-in user; management is gated. */
 export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
   const actor = await requirePageActor();
-  const current = normalizeSearchParams(await searchParams);
+  const params = await searchParams;
+  const current = normalizeSearchParams(params);
   const query = await queryFromSearchParams(listStaffQuerySchema, Promise.resolve(current));
+  // From the raw params, not `current`: a bare `?new` is an empty value, and
+  // `normalizeSearchParams` drops exactly those.
+  const openSheet = can(actor.role, "staff:manage") && wantsCreateSheet(params);
 
   const results = listStaff(query);
   const canManage = can(actor.role, "staff:manage");
@@ -39,7 +44,14 @@ export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
       <PageHeader
         title="Staff"
         description="Everyone who can hold an asset, and what they are allowed to do."
-        actions={canManage ? <StaffCreateButton departments={departments} /> : null}
+        actions={
+          canManage ? (
+            <StaffCreateButton
+              departments={departments}
+              openInitially={openSheet}
+            />
+          ) : null
+        }
       />
 
       <div className="flex flex-col gap-c54-section">

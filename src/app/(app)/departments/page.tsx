@@ -12,6 +12,7 @@ import {
   DepartmentRenameButton,
 } from "@/features/departments/department-forms";
 import { listDepartments } from "@/lib/services/departments";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
 
@@ -22,16 +23,20 @@ import { requirePageActor } from "@/lib/server/guard";
  * filters, so hiding the list would only make them harder to recognise. Adding,
  * renaming and deleting are gated on `department:manage`.
  */
-export default async function DepartmentsPage() {
+export default async function DepartmentsPage({ searchParams }: PageProps<"/departments">) {
   const actor = await requirePageActor();
   const canManage = can(actor.role, "department:manage");
+  // `/departments?new` opens the sheet directly, so the dashboard can link here
+  // instead of to a route that does not exist. Ignored when the person cannot
+  // manage departments anyway — the button that owns the sheet is not rendered.
+  const openSheet = canManage && wantsCreateSheet(await searchParams);
 
   return (
     <>
       <PageHeader
         title="Departments"
         description="The list staff accounts pick from, so every spelling of a department stays consistent."
-        actions={canManage ? <DepartmentCreateButton /> : null}
+        actions={canManage ? <DepartmentCreateButton openInitially={openSheet} /> : null}
       />
 
       <div className="flex flex-col gap-c54-section">

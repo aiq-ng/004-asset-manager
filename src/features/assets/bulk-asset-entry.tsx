@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { Check, ClipboardList, Printer, Upload } from "lucide-react";
+import { Check, ClipboardList, FileSpreadsheet, Printer, Upload } from "lucide-react";
 
 import {
   createBulkAssetEntryAction,
   submitBulkAssetEntryAction,
 } from "@/features/assets/actions";
+import {
+  readSerialsFromFile,
+  SERIAL_FILE_EXTENSIONS,
+  SERIAL_FILE_MAX_BYTES,
+  SerialImportError,
+} from "@/features/assets/serial-import";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
@@ -16,10 +22,20 @@ import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
+import { cn } from "@/lib/utils/cn";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
 import { BULK_ASSET_ENTRY_MAX } from "@/lib/validators/asset";
 
 const MAX_IMAGE_MB = IMAGE_UPLOAD_MAX_BYTES / (1024 * 1024);
+const MAX_SERIAL_FILE_MB = SERIAL_FILE_MAX_BYTES / (1024 * 1024);
+
+/** What an import found, kept so the count on screen can be reconciled. */
+interface ImportedList {
+  fileName: string;
+  serials: string[];
+  skipped: { row: number; reason: string }[];
+  truncated: boolean;
+}
 
 export interface AssetTypeOption {
   id: string;
@@ -132,6 +148,14 @@ function BulkAssetEntryDialog({
   const [draft, setDraft] = useState<Draft | null>(() => readDraft());
   const [setupErrors, setSetupErrors] = useState<Record<string, string>>({});
   const [restored, setRestored] = useState(() => draft !== null);
+
+  // Spreadsheet import. Held as its own state rather than folded into
+  // `setupErrors` because it is not a field error: the file was read fine, and
+  // the serials it found go on to become the batch's quantity and column.
+  const [imported, setImported] = useState<ImportedList | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const serialRefs = useRef(new Map<number, HTMLInputElement>());
 
@@ -292,17 +316,76 @@ function BulkAssetEntryDialog({
       errors.quantity = `Enter ${BULK_ASSET_ENTRY_MAX} or fewer per batch.`;
     }
 
+    // An import already decided the count, so the field is not being asked to
+    // agree with it. Without this the person would have to retype the number
+    // the file just told them, and the two could disagree.
+    if (imported && errors.quantity && quantity !== imported.serials.length) {
+      delete errors.quantity;
+    }
+
     setSetupErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     setConsumedSingle(null);
     setConsumedBatch(null);
     setRestored(false);
+
+    // The imported serials start the column filled rather than empty: the point
+    // of reading the file was not to retype twenty numbers, and the column is
+    // still editable for the odd one that needs fixing before submitting.
+    const serials = imported
+      ? imported.serials
+      : Array.from({ length: quantity }, () => "");
+
     setDraft({
-      batch: { assetType, name, brand, model, quantity },
-      serials: Array.from({ length: quantity }, () => ""),
+      batch: {
+        assetType,
+        name,
+        brand,
+        model,
+        quantity: imported ? imported.serials.length : quantity,
+      },
+      serials,
       saved: {},
     });
+  }
+
+  /**
+   * Reads a picked spreadsheet and folds its serials into the batch.
+   *
+   * The count field is rewritten from the file rather than the file being
+   * fitted to the count: the person who made the file counted the items.
+   */
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Cleared immediately so picking the same file twice in a row still fires.
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportError(null);
+    try {
+      const result = await readSerialsFromFile(file);
+      setImported({
+        fileName: file.name,
+        serials: result.serials,
+        skipped: result.skipped,
+        truncated: result.truncated,
+      });
+
+      // Push the count into the form so what is submitted and what the sheet
+      // will show cannot come apart. Uncontrolled, so the write has to be
+      // imperative.
+      const field = document.getElementById("bulk-asset-quantity") as HTMLInputElement | null;
+      if (field) field.value = String(result.serials.length);
+    } catch (error) {
+      setImported(null);
+      setImportError(
+        error instanceof SerialImportError ? error.message : "That file could not be read.",
+      );
+    } finally {
+      setImporting(false);
+    }
   }
 
   function setSerial(index: number, next: string) {
@@ -485,7 +568,11 @@ function BulkAssetEntryDialog({
             label="How many?"
             htmlFor="bulk-asset-quantity"
             error={setupErrors.quantity}
-            hint={`How many separate items you are entering, up to ${BULK_ASSET_ENTRY_MAX}.`}
+            hint={
+              imported
+                ? `Set from ${imported.serials.length} serials in the file. Edit the count only if you are entering some by hand.`
+                : `How many separate items you are entering, up to ${BULK_ASSET_ENTRY_MAX}.`
+            }
             required
           >
             {(field) => (
@@ -502,6 +589,85 @@ function BulkAssetEntryDialog({
               />
             )}
           </Field>
+
+          {/* The other way to answer "how many, and which". Reading a list beats
+              retyping one, and the serials that come out of the file land in the
+              same editable column as the typed ones — so a mistyped or missed
+              entry is still corrected in place rather than by going back to the
+              file. */}
+          <div className="flex flex-col gap-c54-2 rounded-c54-input border border-dashed border-c54-border-strong bg-c54-bg-muted/30 p-c54-3">
+            <div className="flex flex-wrap items-center justify-between gap-c54-2">
+              <div>
+                <p className="text-c54-xs font-c54-medium text-c54-text-primary">
+                  Or import a list
+                </p>
+                <p className="text-c54-2xs text-c54-text-muted">
+                  Serials from the first column of a spreadsheet, one per row. CSV or
+                  Excel, up to {MAX_SERIAL_FILE_MB} MB.
+                </p>
+              </div>
+              <label
+                htmlFor="bulk-asset-import"
+                className={cn(
+                  "inline-flex h-8 cursor-pointer items-center gap-c54-2 rounded-c54-button border border-c54-border-default bg-c54-bg-card px-c54-3 text-c54-xs font-c54-medium text-c54-text-primary transition-colors",
+                  importing
+                    ? "pointer-events-none opacity-60"
+                    : "hover:border-c54-border-strong hover:bg-c54-bg-muted",
+                )}
+              >
+                <FileSpreadsheet className="size-3.5" />
+                {importing ? "Reading…" : "Choose file"}
+              </label>
+              <input
+                ref={importInputRef}
+                id="bulk-asset-import"
+                type="file"
+                className="sr-only"
+                // Not `name`d: this input never submits. The batch it produces
+                // travels as the count field and the serial column, both of
+                // which are part of the real form.
+                accept={SERIAL_FILE_EXTENSIONS.map((extension) => `.${extension}`).join(",")}
+                aria-label="Import serials from a spreadsheet"
+                onChange={(event) => void handleImport(event)}
+              />
+            </div>
+
+            {importError ? <Alert tone="danger">{importError}</Alert> : null}
+
+            {imported ? (
+              <div className="flex flex-col gap-c54-1">
+                <p className="text-c54-xs text-c54-text-primary">
+                  <span className="font-c54-semibold">{imported.serials.length}</span> serial
+                  {imported.serials.length === 1 ? "" : "s"} read from{" "}
+                  <span className="font-c54-mono">{imported.fileName}</span>.
+                </p>
+                {imported.truncated ? (
+                  <Alert tone="warning">
+                    That file had more serials than one batch holds, so only the first{" "}
+                    {imported.serials.length} were taken. Import the rest as a second batch.
+                  </Alert>
+                ) : null}
+                {imported.skipped.length > 0 ? (
+                  <details className="text-c54-2xs text-c54-text-muted">
+                    <summary className="cursor-pointer">
+                      {imported.skipped.length} row
+                      {imported.skipped.length === 1 ? "" : "s"} skipped
+                    </summary>
+                    <ul className="mt-c54-1 flex flex-col gap-c54-1">
+                      {imported.skipped.slice(0, 20).map((row) => (
+                        <li key={row.row}>
+                          Row {row.row}: {row.reason}
+                        </li>
+                      ))}
+                      {imported.skipped.length > 20 ? (
+                        <li>…and {imported.skipped.length - 20} more.</li>
+                      ) : null}
+                    </ul>
+                  </details>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
 
           <p className="border-t border-c54-border-default pt-c54-3 text-c54-2xs text-c54-text-muted">
             Each item becomes its own asset with its own id and label, so every one of

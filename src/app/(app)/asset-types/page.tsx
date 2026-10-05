@@ -12,6 +12,7 @@ import {
   type AssetTypeRow,
 } from "@/features/asset-types/asset-type-forms";
 import { listAssetTypes } from "@/lib/services/asset-types";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { formatAssetId } from "@/lib/services/asset-id";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
@@ -22,17 +23,20 @@ import { requirePageActor } from "@/lib/server/guard";
  * The code is the asset id prefix, so this page explains that consequence rather
  * than letting somebody discover it after creating two hundred laptops.
  */
-export default async function AssetTypesPage() {
+export default async function AssetTypesPage({ searchParams }: PageProps<"/asset-types">) {
   const actor = await requirePageActor();
   const types = await listAssetTypes();
   const canManage = can(actor.role, "assetType:manage");
+  // `/asset-types?new` opens the sheet directly, so the dashboard can link here
+  // instead of to a route that does not exist.
+  const openSheet = canManage && wantsCreateSheet(await searchParams);
 
   return (
     <>
       <PageHeader
         title="Asset types"
         description="Categories that drive the asset id prefix. Laptop becomes IT-LAP-0001."
-        actions={canManage ? <AssetTypeCreateButton /> : null}
+        actions={canManage ? <AssetTypeCreateButton openInitially={openSheet} /> : null}
       />
 
       <div className="flex flex-col gap-c54-section">

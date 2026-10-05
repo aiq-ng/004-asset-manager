@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
 import { Plus, Upload } from "lucide-react";
 
 import { createAssetAction } from "@/features/assets/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
@@ -228,8 +229,19 @@ function AssetCreateDialog({
  * never queries anything itself and the list is already in flight while the
  * button is being clicked.
  */
-export function AssetCreateButton({ assetTypes }: { assetTypes: AssetTypeOption[] }) {
-  const [open, setOpen] = useState(false);
+export function AssetCreateButton({
+  assetTypes,
+  openInitially = false,
+}: {
+  assetTypes: AssetTypeOption[];
+  /** Open the sheet on arrival, for `/assets?new`. See `create-sheet-param`. */
+  openInitially?: boolean;
+}) {
+  const [open, setOpen] = useState(openInitially);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>
@@ -237,7 +249,7 @@ export function AssetCreateButton({ assetTypes }: { assetTypes: AssetTypeOption[
         <Plus className="size-3.5" />
         Register asset
       </Button>
-      {open ? <AssetCreateDialog assetTypes={assetTypes} onClose={() => setOpen(false)} /> : null}
+      {open ? <AssetCreateDialog assetTypes={assetTypes} onClose={close} /> : null}
     </>
   );
 }

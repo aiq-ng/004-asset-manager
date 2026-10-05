@@ -28,6 +28,7 @@ import { listAssetTypes } from "@/lib/services/asset-types";
 import { listAssetFacets, listAssets, listMatchingAssetIds } from "@/lib/services/assets";
 import { listStaffOptions } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
 import { queryFromSearchParams } from "@/lib/server/query";
@@ -51,6 +52,10 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
   const query = await queryFromSearchParams(listAssetsQuerySchema, Promise.resolve(params));
   // Flattened, empty-stripped view of the query string for filter controls and links.
   const current = normalizeSearchParams(params);
+  // Read from `params`, not `current`: a bare `?new` is an empty value, and
+  // `normalizeSearchParams` exists precisely to drop those, so the flag has to be
+  // read before it is tidied up.
+  const openSheet = wantsCreateSheet(params);
 
   // Started here, awaited further down: these round trips overlap the header
   // render instead of following it.
@@ -79,7 +84,10 @@ export default async function AssetsPage({ searchParams }: PageProps<"/assets">)
                   final width; a single suspense boundary here would let the
                   outline button land under the primary one and shift the row. */}
               <Suspense fallback={<RegisterAssetButtonFallback />}>
-                <RegisterAssetTrigger assetTypes={assetTypes} />
+                <RegisterAssetTrigger
+                  assetTypes={assetTypes}
+                  openInitially={openSheet}
+                />
               </Suspense>
               <Suspense fallback={<BulkAssetEntryButtonFallback />}>
                 <BulkAssetEntryTrigger assetTypes={assetTypes} />

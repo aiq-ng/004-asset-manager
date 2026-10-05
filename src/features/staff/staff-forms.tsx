@@ -4,6 +4,7 @@ import { useActionState, useCallback, useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 
 import { createStaffAction, updateStaffAction } from "@/features/staff/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
@@ -172,9 +173,19 @@ function StaffCreateDialog({
  * so a closed sheet leaves no `<dialog>` in the top layer and no state to reset
  * when it is dismissed — reopening always starts from the initial action state.
  */
-export function StaffCreateButton({ departments }: { departments: DepartmentOption[] }) {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+export function StaffCreateButton({
+  departments,
+  openInitially = false,
+}: {
+  departments: DepartmentOption[];
+  /** Open the sheet on arrival, for `/staff?new`. See `create-sheet-param`. */
+  openInitially?: boolean;
+}) {
+  const [open, setOpen] = useState(openInitially);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>

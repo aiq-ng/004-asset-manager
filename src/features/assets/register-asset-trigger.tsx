@@ -10,10 +10,13 @@ import { AssetCreateButton, type AssetTypeOption } from "@/features/assets/asset
  */
 export async function RegisterAssetTrigger({
   assetTypes,
+  openInitially = false,
 }: {
   assetTypes: Promise<AssetTypeOption[]>;
+  /** Open the sheet on arrival, for `/assets?new`. See `create-sheet-param`. */
+  openInitially?: boolean;
 }) {
-  return <AssetCreateButton assetTypes={await assetTypes} />;
+  return <AssetCreateButton assetTypes={await assetTypes} openInitially={openInitially} />;
 }
 
 /**
