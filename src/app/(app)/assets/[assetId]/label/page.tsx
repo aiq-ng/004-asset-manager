@@ -42,8 +42,11 @@ export default async function AssetLabelPage({
         </Link>
       </div>
 
-      <PrintControls />
-      <ExportJpegButton logoLabel="Nigeria" assets={[asset]} />
+      {/* Print and export side by side: two routes to the same label, so they
+          belong in one row rather than stacked around the settings note. */}
+      <PrintControls>
+        <ExportJpegButton logoLabel="Nigeria" assets={[asset]} />
+      </PrintControls>
 
       {/* The tag is the print target and the preview in one: on screen it lays
           out as a full-width card, on paper the chrome around it is hidden by

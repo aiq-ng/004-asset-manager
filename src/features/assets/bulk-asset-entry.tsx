@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { Check, ClipboardList, FileSpreadsheet, Printer, Upload } from "lucide-react";
+import { Check, ClipboardList, FileSpreadsheet, Printer, Upload, X } from "lucide-react";
 
 import {
   createBulkAssetEntryAction,
@@ -64,6 +64,30 @@ interface Draft {
   serials: string[];
   /** Slot index (as a string) to the asset id it was registered as. */
   saved: Record<string, string>;
+  /**
+   * Slot indexes (as strings) that were filled and then emptied again.
+   *
+   * An empty slot is not on its own a problem: the column starts empty and is
+   * meant to be filled one row at a time, so "no text yet" is the normal state
+   * of a row nobody has reached. What must block is the *other* empty — a row
+   * that held a serial and then lost it, because from the outside that looks
+   * identical to a row waiting to be typed into. Without this the batch would
+   * quietly drop the item and still submit, registering four things out of five
+   * with nothing on screen saying so.
+   *
+   * So the distinction is recorded rather than inferred: a slot is only held
+   * against the operator once it has been emptied *after* being filled.
+   */
+  cleared: string[];
+}
+
+/**
+ * A batch that finished: enough to render its results once the draft is gone.
+ */
+interface FinishedBatch {
+  assetType: string;
+  total: number;
+  ids: string[];
 }
 
 const DRAFT_KEY = "inv-cat:bulk-asset-entry";
@@ -89,6 +113,9 @@ function readDraft(): Draft | null {
       },
       serials: parsed.serials,
       saved: parsed.saved ?? {},
+      // A draft written before this field existed has no erased-slot state, which
+      // is the same as having none on record.
+      cleared: parsed.cleared ?? [],
     };
   } catch {
     // A corrupt or unreadable draft is not worth surfacing: the worst case is that
@@ -160,6 +187,16 @@ function BulkAssetEntryDialog({
   const serialRefs = useRef(new Map<number, HTMLInputElement>());
 
   /**
+   * Where the caret should land after a slot is removed.
+   *
+   * The button that was just clicked is itself removed from the tree, so the
+   * browser drops focus onto `<body>` — from where a keyboard user has to tab
+   * all the way back into the column. The row that slid into the gap is the
+   * nearest sensible place to land.
+   */
+  const refocusRef = useRef<number | null>(null);
+
+  /**
    * The batch's one photo, shared by every row.
    *
    * Held in a ref rather than in `draft`, and that is a deliberate gap: a `File`
@@ -211,9 +248,17 @@ function BulkAssetEntryDialog({
     }
   }, [draft]);
 
+  useEffect(() => {
+    const index = refocusRef.current;
+    if (index === null) return;
+    refocusRef.current = null;
+    serialRefs.current.get(index)?.focus();
+  }, [draft]);
+
   const batch = draft?.batch ?? null;
   const serials = draft?.serials ?? [];
   const saved = draft?.saved ?? {};
+  const cleared = draft?.cleared ?? [];
 
   const total = batch?.quantity ?? 0;
   const savedIndexes = Object.keys(saved).map(Number);
@@ -223,6 +268,17 @@ function BulkAssetEntryDialog({
   const filledIndexes = serials
     .map((_, index) => index)
     .filter((index) => value(index).trim().length > 0 && !isSaved(index));
+
+  /**
+   * Rows that held a serial and were then emptied.
+   *
+   * `cleared` only carries indexes that are still live, so a slot removed after
+   * being emptied cannot go on blocking from beyond the end of the column.
+   */
+  const clearedIndexes = serials
+    .map((_, index) => index)
+    .filter((index) => !isSaved(index) && cleared.includes(String(index)));
+  const hasClearedSlot = clearedIndexes.length > 0;
 
   const allFilled = total > 0 && filledIndexes.length + savedIndexes.length >= total;
   const unsavedSerials = filledIndexes.map((index) => value(index).trim());
@@ -293,7 +349,44 @@ function BulkAssetEntryDialog({
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([, assetId]) => assetId);
   const registeredCount = registeredIds.length;
-  const complete = total > 0 && registeredCount >= total;
+  const batchComplete = total > 0 && registeredCount >= total;
+
+  /**
+   * What a finished batch put on the register, kept after its draft is dropped.
+   *
+   * The results screen outlives the draft on purpose — see the fold below — so it
+   * cannot read the ids out of it any more and needs its own copy.
+   */
+  const [finished, setFinished] = useState<FinishedBatch | null>(null);
+
+  if (batch && batchComplete && !finished) {
+    setFinished({
+      assetType: batch.assetType,
+      total,
+      ids: registeredIds,
+    });
+    // The draft has done its job the moment the last item is on the register.
+    //
+    // Left behind, it is what makes "Register in bulk" open the *previous*
+    // batch's results forever: the sheet restores it, sees every slot already
+    // saved, calls the batch complete and shows "Print their labels" again — with
+    // no setup step and no way back to one. Someone who has just registered a
+    // batch is then unable to register the next one at all, which is a dead end
+    // only a hand-edited localStorage can clear.
+    setDraft(null);
+  }
+
+  const complete = finished !== null || batchComplete;
+
+  /**
+   * Whether the sheet is on its first step.
+   *
+   * Cannot be `!batch` on its own: once a batch finishes its draft is dropped, so
+   * there is no batch *and* the results are on screen at the same time. Gating the
+   * setup form on the draft alone would render the setup step underneath the
+   * results, with the column the operator just finished hidden behind it.
+   */
+  const showSetup = !batch && !finished;
   const hasFieldError = Object.keys(singleState.fieldErrors ?? {}).length > 0;
 
   function handleStart(event: React.FormEvent<HTMLFormElement>) {
@@ -347,6 +440,7 @@ function BulkAssetEntryDialog({
       },
       serials,
       saved: {},
+      cleared: [],
     });
   }
 
@@ -389,17 +483,80 @@ function BulkAssetEntryDialog({
   }
 
   function setSerial(index: number, next: string) {
-    setDraft((previous) =>
-      previous
-        ? { ...previous, serials: previous.serials.map((entry, i) => (i === index ? next : entry)) }
-        : previous,
-    );
+    setDraft((previous) => {
+      if (!previous) return previous;
+      const key = String(index);
+      const wasFilled = previous.serials[index]?.trim().length > 0;
+      const isFilled = next.trim().length > 0;
+
+      // Only the emptied-after-filled transition is recorded. Typing into an
+      // empty row must not arm the block, or the very first character of the
+      // very first batch would trip it.
+      let nextCleared = previous.cleared;
+      if (isFilled) {
+        if (previous.cleared.includes(key)) {
+          nextCleared = previous.cleared.filter((entry) => entry !== key);
+        }
+      } else if (wasFilled && !previous.cleared.includes(key)) {
+        nextCleared = [...previous.cleared, key];
+      }
+
+      return {
+        ...previous,
+        serials: previous.serials.map((entry, i) => (i === index ? next : entry)),
+        cleared: nextCleared,
+      };
+    });
+  }
+
+  /**
+   * Drops one slot from the column, and the batch's count with it.
+   *
+   * The count is the part that matters. `total` is `batch.quantity`, and the
+   * sheet is only ever "complete" once `registeredCount` reaches it, so a slot
+   * that was emptied could never be left behind by filling it in again alone —
+   * the batch would sit at four of five forever. Removing the slot is what makes
+   * the count honest.
+   *
+   * `saved` is keyed by slot index, so dropping a slot from the middle slides
+   * every later index down by one. Those keys are remapped here rather than
+   * left to point at the wrong row, which would show one item's asset id against
+   * another item's serial. Saved slots cannot be removed at all: the asset
+   * exists in the register, and hiding its row would not unregister it.
+   */
+  function removeSerial(index: number) {
+    setDraft((previous) => {
+      if (!previous || String(index) in previous.saved) return previous;
+
+      const nextSerials = previous.serials.filter((_, i) => i !== index);
+      const shift = (from: number) => (from > index ? from - 1 : from);
+
+      const nextSaved: Record<string, string> = {};
+      for (const [key, assetId] of Object.entries(previous.saved)) {
+        nextSaved[String(shift(Number(key)))] = assetId;
+      }
+
+      return {
+        ...previous,
+        batch: { ...previous.batch, quantity: nextSerials.length },
+        serials: nextSerials,
+        saved: nextSaved,
+        cleared: previous.cleared
+          .map(Number)
+          .filter((entry) => entry !== index)
+          .map(shift)
+          .map(String),
+      };
+    });
   }
 
   function startOver() {
     setConsumedSingle(null);
     setConsumedBatch(null);
     setRestored(false);
+    // The results screen reads from `finished`, not the draft, so clearing only
+    // the draft would leave it on screen claiming a batch is done.
+    setFinished(null);
     setDraft(null);
   }
 
@@ -415,7 +572,7 @@ function BulkAssetEntryDialog({
     serialRefs.current.get(from)?.focus();
   }
 
-  const title = !batch ? "Register in bulk" : complete ? "All registered" : "Register in bulk";
+  const title = complete ? "All registered" : "Register in bulk";
 
   // Whichever action the current button posts to is the one whose pending state
   // the sheet cares about; the other form is not being submitted and its state is
@@ -424,7 +581,7 @@ function BulkAssetEntryDialog({
   //
   // The setup step is deliberately absent: it is a client-side `onSubmit` that
   // reads the form and calls `setDraft`, with no round trip to wait for.
-  const pending = !batch ? false : submitMode ? batchPending : singlePending;
+  const pending = showSetup ? false : submitMode ? batchPending : singlePending;
 
   return (
     <Dialog
@@ -433,15 +590,17 @@ function BulkAssetEntryDialog({
       side="right"
       title={title}
       description={
-        !batch
-          ? "Describe the items once, then enter each one's serial number."
-          : "Enter the serials one by one, or fill the column and submit it at once."
+        finished
+          ? "Here is what went onto the register."
+          : showSetup
+            ? "Describe the items once, then enter each one's serial number."
+            : "Enter the serials one by one, or fill the column and submit it at once."
       }
       // Not while the setup step is running — there is nothing in flight then, and
       // locking the sheet would be locking it against a click that already landed.
       busy={pending}
       footer={
-        !batch ? (
+        showSetup ? (
           <>
             {restored ? (
               <Button variant="ghost" onClick={startOver}>
@@ -460,7 +619,12 @@ function BulkAssetEntryDialog({
           <>
             <DialogCancelButton />
             {submitMode ? (
-              <SubmitButton form="bulk-asset-form" pendingLabel="Registering…" pending={pending}>
+              <SubmitButton
+                form="bulk-asset-form"
+                pendingLabel="Registering…"
+                pending={pending}
+                disabled={hasClearedSlot}
+              >
                 Submit {unsavedSerials.length} item{unsavedSerials.length === 1 ? "" : "s"}
               </SubmitButton>
             ) : (
@@ -468,7 +632,10 @@ function BulkAssetEntryDialog({
                 form="bulk-asset-form"
                 pendingLabel="Saving…"
                 pending={pending}
-                disabled={!currentSerial}
+                // `hasClearedSlot` blocks the *other* rows too, not just the empty
+                // one. Saving around a hole would let the batch be submitted
+                // short, which is the exact failure the block exists to stop.
+                disabled={!currentSerial || hasClearedSlot}
               >
                 Save and next
               </SubmitButton>
@@ -479,7 +646,7 @@ function BulkAssetEntryDialog({
         )
       }
     >
-      {!batch ? (
+      {showSetup ? (
         <form id="bulk-asset-setup" onSubmit={handleStart} className="flex flex-col gap-c54-4">
           {restored && draft ? (
             <Alert tone="warning" title="Draft found">
@@ -768,6 +935,17 @@ function BulkAssetEntryDialog({
             </Alert>
           ) : null}
 
+          {hasClearedSlot ? (
+            <Alert tone="warning" title="Some items have no serial number">
+              <p id="serial-cleared-hint">
+                {clearedIndexes.length === 1
+                  ? `Item ${clearedIndexes[0] + 1} was filled in and then emptied. `
+                  : `Items ${clearedIndexes.map((index) => index + 1).join(", ")} were filled in and then emptied. `}
+                Put the serial back, or remove the item with its × button.
+              </p>
+            </Alert>
+          ) : null}
+
           {!savedSingle && !batchResult?.created.length && singleState.error && !hasFieldError ? (
             <Alert tone="danger">{singleState.error}</Alert>
           ) : null}
@@ -846,10 +1024,46 @@ function BulkAssetEntryDialog({
                       }}
                       placeholder="Serial number"
                       aria-label={`Serial number for item ${index + 1}`}
+                      aria-invalid={cleared.includes(String(index)) || undefined}
+                      aria-errormessage={
+                        cleared.includes(String(index)) ? "serial-cleared-hint" : undefined
+                      }
                       autoComplete="off"
                       spellCheck={false}
-                      invalid={Boolean(singleState.fieldErrors?.serialNumber)}
+                      invalid={
+                        Boolean(singleState.fieldErrors?.serialNumber) ||
+                        cleared.includes(String(index))
+                      }
                     />
+                    {/* `type="button"` is load-bearing: the default is `submit`, and
+                        this sits inside the form that registers the batch, so a plain
+                        button here would post the whole column while removing a row.
+                        `aria-label` rather than a tooltip alone, because the icon
+                        carries no text of its own. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Set outside the state updater on purpose: the updater is
+                        // pure and React may run it twice in StrictMode, so a ref
+                        // written in there would be written twice.
+                        refocusRef.current = Math.min(index, serials.length - 2);
+                        removeSerial(index);
+                      }}
+                      // The last slot cannot go. `total` drives "complete", and a
+                      // batch of zero can never be complete, so emptying the
+                      // column would strand the sheet with nothing to type into
+                      // and no way to register it.
+                      disabled={serials.length <= 1}
+                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-c54-button text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      aria-label={`Remove item ${index + 1}`}
+                      title={
+                        serials.length <= 1
+                          ? "A batch needs at least one item"
+                          : "Remove this item"
+                      }
+                    >
+                      <X className="size-4" aria-hidden="true" />
+                    </button>
                   </li>
                 ),
               )}
@@ -858,9 +1072,11 @@ function BulkAssetEntryDialog({
 
           <div className="flex flex-wrap items-center justify-between gap-c54-2 border-t border-c54-border-default pt-c54-3">
             <p className="text-c54-2xs text-c54-text-muted">
-              {allFilled
-                ? `All ${total} serials are in. Submit them together, or save one at a time.`
-                : `${unsavedSerials.length} of ${total} filled in. Progress is saved in this browser.`}
+              {hasClearedSlot
+                ? "Fill the emptied items back in, or remove them, before going on."
+                : allFilled
+                  ? `All ${total} serials are in. Submit them together, or save one at a time.`
+                  : `${unsavedSerials.length} of ${total} filled in. Progress is saved in this browser.`}
             </p>
             <Button variant="ghost" size="sm" onClick={startOver}>
               Start over
@@ -869,11 +1085,11 @@ function BulkAssetEntryDialog({
         </>
       ) : null}
 
-      {batch && complete ? (
+      {finished ? (
         <div className="flex flex-col gap-c54-4">
           <Alert tone="success" title="All registered">
-            {total} {typeName(assetTypes, batch.assetType).toLowerCase()}
-            {total === 1 ? "" : "s"} added to the register.
+            {finished.total} {typeName(assetTypes, finished.assetType).toLowerCase()}
+            {finished.total === 1 ? "" : "s"} added to the register.
           </Alert>
 
           {batchResult && batchResult.skipped.length > 0 ? (
@@ -893,7 +1109,7 @@ function BulkAssetEntryDialog({
               Asset ids created
             </p>
             <ul className="mt-c54-2 flex flex-wrap gap-c54-1">
-              {registeredIds.map((assetId) => (
+              {finished.ids.map((assetId) => (
                 <li key={assetId}>
                   <Link
                     href={`/assets/${assetId}`}
@@ -907,8 +1123,8 @@ function BulkAssetEntryDialog({
           </div>
 
           <Link
-            href={`/assets/labels?ids=${registeredIds.join(",")}`}
-            className="inline-flex h-9 items-center justify-center gap-c54-2 rounded-c54-button bg-c54-action-primary px-c54-4 text-c54-sm font-c54-medium text-c54-text-inverted hover:bg-c54-action-primary-hover"
+            href={`/assets/labels?ids=${finished.ids.join(",")}`}
+            className="inline-flex h-9 items-center justify-center gap-c54-2 rounded-c54-button bg-c54-action-primary px-c54-4 text-c54-sm font-c54-medium text-c54-action-primary-fg hover:bg-c54-action-primary-hover"
           >
             <Printer className="size-4" />
             Print their labels

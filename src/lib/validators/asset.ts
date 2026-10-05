@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   assetIdentifierSchema,
   assetStatusSchema,
+  nonEmptyRepeatedFormField,
   optionalTrimmedString,
   paginationSchema,
 } from "@/lib/validators/common";
@@ -112,11 +113,10 @@ export const bulkAssetSubmitSchema = z
     /** Optional; "" and whitespace are stored as NULL. */
     model: z.string().trim().max(100, "model must be <= 100 characters").nullish(),
     /** In the order they should be created, so asset ids run down the column. */
-    serials: z
-      .array(z.string().trim().max(120, "serial must be <= 120 characters"))
-      .max(BULK_ASSET_ENTRY_MAX, "too many rows submitted")
-      .transform((values) => values.filter((value) => value.length > 0))
-      .refine((values) => values.length > 0, "Enter at least one serial number"),
+    serials: nonEmptyRepeatedFormField("Enter at least one serial number").refine(
+      (values) => values.length <= BULK_ASSET_ENTRY_MAX,
+      "too many rows submitted",
+    ),
     status: z.enum(["AVAILABLE", "UNDER_REPAIR", "RETIRED"]).default("AVAILABLE"),
   })
   .strict();

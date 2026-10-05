@@ -60,7 +60,28 @@ async function printWhenReady() {
  * fetched from `/api/assets/[id]/qr`, so a fixed delay would be a guess — on a
  * slow response the dialog opens first and the tag prints with an empty QR box.
  */
-export function PrintControls({ label = "Print label" }: { label?: string }) {
+/**
+ * The print settings and the actions that use them.
+ *
+ * `children` is the slot for the other way of getting the same label off the
+ * screen — the JPEG export, which rasterises the identical tag rather than
+ * sending it to a printer. Both belong in one row beside the settings note: they
+ * are two routes to the same artefact, and stacked vertically they read as two
+ * separate tasks with an instruction paragraph wedged between them.
+ *
+ * The caller passes the whole export control, including its own progress text,
+ * so the two buttons and any "Rendering 3 of 8…" status sit together rather
+ * than the status stranding itself on a line of its own. The spacing belongs to
+ * this component, so anything rendered as a child should not bring its own
+ * bottom margin — see `ExportJpegButton`.
+ */
+export function PrintControls({
+  label = "Print label",
+  children,
+}: {
+  label?: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="c54-no-print mb-c54-section flex flex-wrap items-center justify-between gap-c54-4">
       <p className="text-c54-sm text-c54-text-secondary">
@@ -68,10 +89,13 @@ export function PrintControls({ label = "Print label" }: { label?: string }) {
         background graphics and turn off headers and footers. Leave the paper
         size alone: the label sets its own.
       </p>
-      <Button size="sm" onClick={() => void printWhenReady()}>
-        <Printer className="size-3.5" />
-        {label}
-      </Button>
+      <div className="flex flex-wrap items-center gap-c54-2">
+        <Button size="sm" onClick={() => void printWhenReady()}>
+          <Printer className="size-3.5" />
+          {label}
+        </Button>
+        {children}
+      </div>
     </div>
   );
 }

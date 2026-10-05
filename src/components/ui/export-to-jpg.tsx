@@ -165,7 +165,11 @@ export function ExportJpegButton({
 
   return (
     <>
-      <div className="c54-no-print mb-c54-section flex items-center gap-c54-3">
+      {/* Rendered as a child of `PrintControls`, which owns the row and the
+          spacing around it. That is why this wrapper carries no bottom margin of
+          its own — with one it would drop the button a line below the print
+          button it is supposed to sit beside. */}
+      <div className="c54-no-print flex items-center gap-c54-3">
         <Button
           size="sm"
           variant="secondary"

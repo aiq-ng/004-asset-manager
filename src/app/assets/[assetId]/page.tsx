@@ -5,6 +5,7 @@ import { AssetPublicCard } from "@/features/assets/asset-public-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { readPageActor } from "@/lib/server/guard";
 import { getPublicAsset } from "@/lib/services/assets";
+import { wantsRegisteredPrompt } from "@/features/assets/registered-prompt-param";
 import { superadminExists } from "@/lib/services/staff-bootstrap";
 
 /**
@@ -26,7 +27,10 @@ import { superadminExists } from "@/lib/services/staff-bootstrap";
  * signed-in user never sees the reduced card: they get the real page, with its
  * shell, its controls and its history.
  */
-export default async function AssetPage({ params }: PageProps<"/assets/[assetId]">) {
+export default async function AssetPage({
+  params,
+  searchParams,
+}: PageProps<"/assets/[assetId]">) {
   const actor = await readPageActor();
   const { assetId } = await params;
 
@@ -48,7 +52,11 @@ export default async function AssetPage({ params }: PageProps<"/assets/[assetId]
           role: actor.role,
         }}
       >
-        <AssetDetailView assetId={assetId} actor={actor} />
+        <AssetDetailView
+          assetId={assetId}
+          actor={actor}
+          justRegistered={wantsRegisteredPrompt(await searchParams)}
+        />
       </AppShell>
     );
   }

@@ -14,6 +14,7 @@ import {
   type BulkAssetResult,
 } from "@/lib/services/assets";
 import { createAssignment, returnAssignment } from "@/lib/services/assignments";
+import { REGISTERED_PROMPT_PARAM } from "@/features/assets/registered-prompt-param";
 import { parseUploadedImage } from "@/lib/services/images";
 import type { AssetDto } from "@/lib/services/serializers";
 import {
@@ -94,8 +95,11 @@ export async function createAssetAction(
     );
 
     // Land on the record just created; redirecting also means a reload cannot
-    // resubmit the form.
-    redirect(`/assets/${created.assetId}`);
+    // resubmit the form. The `registered` flag rides along so the new page can
+    // offer to make a label for the asset that was just created — see
+    // `registered-prompt-param` for why that offer travels as a query flag
+    // rather than being raised from inside the sheet.
+    redirect(`/assets/${created.assetId}?${REGISTERED_PROMPT_PARAM}=1`);
   } catch (error) {
     unstable_rethrow(error);
 

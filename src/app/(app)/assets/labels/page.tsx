@@ -92,16 +92,19 @@ export default async function AssetLabelsPage({
         matches.
       </p>
 
-      <PrintControls label={`Print ${assets.length} ${assets.length === 1 ? "label" : "labels"}`} />
-      <ExportJpegButton
-        logoLabel="Nigeria"
-        assets={assets.map((a) => ({
-          assetId: a.assetId,
-          device: a.device,
-          position: a.position,
-          serialNumber: a.serialNumber ?? "",
-        }))}
-      />
+      {/* Print and export side by side: two routes to the same label, so they
+          belong in one row rather than stacked around the settings note. */}
+      <PrintControls label={`Print ${assets.length} ${assets.length === 1 ? "label" : "labels"}`}>
+        <ExportJpegButton
+          logoLabel="Nigeria"
+          assets={assets.map((a) => ({
+            assetId: a.assetId,
+            device: a.device,
+            position: a.position,
+            serialNumber: a.serialNumber ?? "",
+          }))}
+        />
+      </PrintControls>
 
       {/* The tags must be direct siblings: the print stylesheet breaks the page
           after every tag except the `:last-child`, and wrapping each one would

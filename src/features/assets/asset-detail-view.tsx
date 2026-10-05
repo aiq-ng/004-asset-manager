@@ -22,6 +22,7 @@ import { getAsset, signStorageUrl } from "@/lib/services/assets";
 import { listStaffOptions } from "@/lib/services/staff";
 import { isAssignableTarget } from "@/features/staff/role-presentation";
 import { can, type Actor } from "@/lib/auth/permissions";
+import { RegisteredLabelPrompt } from "@/features/assets/registered-label-prompt";
 
 /**
  * The signed-in half of the asset detail page.
@@ -40,9 +41,19 @@ import { can, type Actor } from "@/lib/auth/permissions";
 export async function AssetDetailView({
   assetId,
   actor,
+  justRegistered = false,
 }: {
   assetId: string;
   actor: Actor;
+  /**
+   * Whether to raise the one-off "print a label for this?" offer.
+   *
+   * Set by the route from the `registered` query flag the create action
+   * redirects with. Defaulted rather than required so every other caller — the
+   * public route's signed-in branch, and anything added later — gets the plain
+   * asset page and cannot accidentally inherit a dialog.
+   */
+  justRegistered?: boolean;
 }) {
   let asset;
   try {
@@ -93,6 +104,11 @@ export async function AssetDetailView({
 
   return (
     <>
+      {/* Raised after the asset is registered, once. See `RegisteredLabelPrompt`. */}
+      {justRegistered ? (
+        <RegisteredLabelPrompt assetId={asset.assetId} assetNumber={asset.assetId} />
+      ) : null}
+
       <PageHeader
         title={asset.description}
         eyebrow={<CodeChip>{asset.assetId}</CodeChip>}
