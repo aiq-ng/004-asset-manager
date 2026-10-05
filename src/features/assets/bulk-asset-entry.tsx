@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Textarea } from "@/components/ui/controls";
+import { Input } from "@/components/ui/controls";
 import { EntitySelect } from "@/components/ui/entity-select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";

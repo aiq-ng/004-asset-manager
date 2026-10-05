@@ -149,7 +149,7 @@ function generateTailwind() {
   const borderRadius = {};
   const fontFamily = {};
 
-  for (const [key, value] of Object.entries(flat)) {
+  for (const key of Object.keys(flat)) {
     if (key.startsWith('color-')) {
       colors[key] = `var(--c54-${key})`;
     } else if (key.startsWith('space-')) {

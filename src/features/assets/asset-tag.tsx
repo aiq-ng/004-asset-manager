@@ -87,7 +87,6 @@ export function AssetTag({
   device,
   position,
   serialNumber = "",
-  logoLabel = "HABARI",
   bleed,
 }: AssetTagProps) {
   return (

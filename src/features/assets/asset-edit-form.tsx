@@ -4,7 +4,7 @@ import { useActionState } from "react";
 
 import { updateAssetAction } from "@/features/assets/actions";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Input, Select } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
