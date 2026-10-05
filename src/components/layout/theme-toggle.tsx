@@ -1,7 +1,8 @@
 "use client";
 
+import { Moon, Sun } from "lucide-react";
+
 import { useThemeMode } from "@/components/providers/theme-mode-provider";
-import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -35,8 +36,8 @@ export function ThemeToggle({
         className,
       )}
     >
-      <Icons.Sun className="size-4 [html[data-c54-mode='dark']_&]:hidden" />
-      <Icons.Moon className="hidden size-4 [html[data-c54-mode='dark']_&]:block" />
+      <Sun className="size-4 [html[data-c54-mode='dark']_&]:hidden" />
+      <Moon className="hidden size-4 [html[data-c54-mode='dark']_&]:block" />
     </button>
   );
 }

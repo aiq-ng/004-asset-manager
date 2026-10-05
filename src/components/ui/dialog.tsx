@@ -1,7 +1,17 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
@@ -36,6 +46,9 @@ type Phase = "closed" | "opening" | "open" | "closing";
  */
 const EXIT_TIMEOUT_MS = 600;
 
+/** No-op subscription for the hydration flag below: nothing ever changes. */
+const emptySubscribe = () => () => undefined;
+
 /**
  * The *deferred* close: asks the panel to leave, then runs the caller's `onClose`
  * once the exit animation has finished.
@@ -44,17 +57,30 @@ const EXIT_TIMEOUT_MS = 600;
  * of the DOM on the same tick as the click, so the exit animation never gets a
  * frame — which is how a Cancel button ends up snapping shut while ESC glides.
  * Context is how the panel and its footer reach the same deferred path.
+ *
+ * `busy` rides along so the controls in the panel and its footer can lock
+ * together. See `Dialog`'s `busy` prop for what that is protecting.
  */
-const DialogCloseContext = createContext<(() => void) | null>(null);
+const DialogCloseContext = createContext<{
+  /** User-initiated dismissal; refused while `busy`. */
+  requestClose: () => void;
+  /** Programmatic close after a completed action; ignores `busy`. */
+  requestCloseResolved: () => void;
+  busy: boolean;
+} | null>(null);
 
-function useDialogClose(): () => void {
-  const requestClose = useContext(DialogCloseContext);
+function useDialog(): {
+  requestClose: () => void;
+  requestCloseResolved: () => void;
+  busy: boolean;
+} {
+  const value = useContext(DialogCloseContext);
 
-  if (!requestClose) {
+  if (!value) {
     throw new Error("Dialog controls must be rendered inside a <Dialog>");
   }
 
-  return requestClose;
+  return value;
 }
 
 /**
@@ -72,10 +98,15 @@ export function DialogCancelButton({
   React.ComponentProps<typeof Button>,
   "onClick" | "children"
 >) {
-  const requestClose = useDialogClose();
+  const { requestClose, busy } = useDialog();
 
+  // Locked while `busy`, unless the caller has explicitly said otherwise: a
+  // dismissal during an in-flight mutation closes the panel over a request that
+  // is still running, and the operator loses sight of its result.
   return (
-    <Button variant="outline" onClick={requestClose} {...props}>
+    // `{...props}` first for the same reason as `SubmitButton`: spread last
+    // would let a caller's `disabled` overwrite the busy lock.
+    <Button {...props} variant="outline" onClick={requestClose} disabled={busy || props.disabled}>
       {children}
     </Button>
   );
@@ -98,6 +129,11 @@ export function DialogCancelButton({
  * keep this mounted for the duration or unmount it on close — either way the
  * animation gets to run. That is what lets the trigger components stay as simple
  * as `{open ? <Sheet /> : null}`.
+ *
+ * `busy` says a mutation inside the panel is in flight. It disables the footer
+ * Cancel and the header close button, and makes ESC and a backdrop click no-ops,
+ * so a half-submitted form cannot be dismissed out from under itself. Callers
+ * get it from the third element of `useActionState`.
  */
 export function Dialog({
   open,
@@ -109,6 +145,7 @@ export function Dialog({
   size = "md",
   side = "center",
   className,
+  busy = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -119,11 +156,35 @@ export function Dialog({
   size?: DialogSize;
   side?: DialogSide;
   className?: string;
+  /** Disables every dismissal path while a mutation is in flight. */
+  busy?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
   const [phase, setPhase] = useState<Phase>(open ? "open" : "closed");
+
+  // False on the server and on the client's very first render, true after
+  // hydration. A dialog reached by a deep link — `/staff?new` — is `open` from
+  // the first render, and `createPortal` has no `document` to attach to on the
+  // server, which threw and dropped the whole route into client-only rendering.
+  //
+  // Gating on this rather than on `typeof document` keeps the two renders
+  // identical: the server emits no dialog *and* the client's first pass emits
+  // none, so there is no hydration mismatch to report — which is exactly what the
+  // `phase === "closed"` note below is about, and why that shortcut was not safe
+  // to reuse here. Dialogs opened by a click are unaffected: hydration has long
+  // finished by the time anybody can click.
+  //
+  // `useSyncExternalStore` rather than `useState` + an effect: this is React's
+  // own "am I hydrated yet" primitive, and it reads the flag during render
+  // instead of setting state from one, which the compiler rightly rejects as a
+  // cascading render.
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
 
   // Both of these are read from effects and event handlers, never during render,
   // and callers routinely pass an inline arrow. Holding them in refs keeps them
@@ -133,9 +194,32 @@ export function Dialog({
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  const requestClose = useCallback(() => {
+  // Two distinct close paths, and the difference matters.
+  //
+  // `requestClose` is a *user* dismissal — Cancel, the X, ESC, the backdrop.
+  // While a mutation is in flight those are dropped: the request would otherwise
+  // land the moment the action resolves, closing a panel the operator may have
+  // already been looking past.
+  //
+  // `requestCloseResolved` is the programmatic close a completed action asks for,
+  // and it deliberately ignores `busy`. `pending` is still true on the render
+  // where the action's success state first appears — React settles the two in
+  // the same commit — so a shared guard would refuse the close that the success
+  // path exists to perform, and the sheet would sit there for good. That is not
+  // hypothetical: it is what this pair was written to fix.
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  const closeNow = useCallback(() => {
     setPhase((current) => (current === "open" || current === "opening" ? "closing" : current));
   }, []);
+
+  const requestClose = useCallback(() => {
+    if (busyRef.current) return;
+    closeNow();
+  }, [closeNow]);
 
   // Prop changes drive the machine — but only *changes*. A dialog mounted
   // conditionally by its caller passes a literal `open` and never changes it, and
@@ -187,7 +271,12 @@ export function Dialog({
     // `closed`: the portal is about to disappear, so take the element out of the
     // top layer explicitly rather than leaving the UA to notice the removal.
     if (node.open) node.close();
-  }, [phase]);
+    // `mounted` is in the dependency list because of the deep-link case: until
+    // it flips, this effect runs with `ref.current` null and returns early, and
+    // the `<dialog>` only appears on the render after that. Without it here the
+    // element mounted but was never shown — a dialog present in the DOM, closed,
+    // and therefore invisible and inert.
+  }, [phase, mounted]);
 
   // ESC and the platform's own light-dismiss both arrive as `cancel`. The default
   // would close the element immediately and skip the exit animation, so it is
@@ -229,7 +318,11 @@ export function Dialog({
   // would make the server render an empty tree while the client renders a portal
   // — a guaranteed hydration mismatch, and one per row on a list page, because
   // the error is reported for every dialog on the page.
-  if (phase === "closed") return null;
+  //
+  // `mounted` guards the complementary case: a dialog that arrives *already*
+  // open from a deep link, where both renders have to agree and neither can
+  // portal yet.
+  if (phase === "closed" || !mounted) return null;
 
   const isSheet = side === "right";
   const closing = phase === "closing";
@@ -246,7 +339,7 @@ export function Dialog({
       : "open:animate-sheet-in";
 
   return createPortal(
-    <DialogCloseContext.Provider value={requestClose}>
+    <DialogCloseContext.Provider value={{ requestClose, requestCloseResolved: closeNow, busy }}>
     <dialog
       ref={ref}
       onClick={handleClick}
@@ -293,7 +386,7 @@ export function Dialog({
               </p>
             ) : null}
           </div>
-          <DialogCloseButton onClose={requestClose} />
+          <DialogCloseButton onClose={requestClose} disabled={busy} />
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-c54-pad-lg py-c54-pad">{children}</div>
@@ -324,26 +417,34 @@ export function Dialog({
  * within the provider to reach the context.
  */
 export function DialogCloseOnSuccess({ when }: { when: boolean }) {
-  const requestClose = useDialogClose();
+  // `requestCloseResolved`, not `requestClose`: the action's own success is
+  // exactly the moment `pending` is still true, so the busy guard meant for user
+  // dismissals would refuse this and strand the sheet open.
+  const { requestCloseResolved } = useDialog();
 
   useEffect(() => {
-    if (when) requestClose();
-  }, [when, requestClose]);
+    if (when) requestCloseResolved();
+  }, [when, requestCloseResolved]);
 
   return null;
 }
 
-export function DialogCloseButton({ onClose }: { onClose: () => void }) {
+export function DialogCloseButton({
+  onClose,
+  disabled = false,
+}: {
+  onClose: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClose}
-      className="-m-c54-2 shrink-0 rounded-c54-sm p-c54-2 text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary"
+      disabled={disabled}
+      className="-m-c54-2 shrink-0 rounded-c54-sm p-c54-2 text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary disabled:pointer-events-none disabled:opacity-45"
       aria-label="Close dialog"
     >
-      <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-        <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
-      </svg>
+      <X aria-hidden="true" className="size-4" />
     </button>
   );
 }

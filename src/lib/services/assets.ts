@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/serializers";
 import { reserveAssetId } from "@/lib/services/asset-id";
 import type {
+  BulkAssetSubmitInput,
   CreateAssetInput,
   ListAssetsQuery,
   UpdateAssetInput,
@@ -23,6 +24,18 @@ import type {
 async function signImage(imageKey: string | null): Promise<string | null> {
   if (!imageKey) return null;
   return getStorage().getPresignedUrl(imageKey);
+}
+
+/**
+ * Presigned GET URL for any stored object key — return photos included.
+ *
+ * Return photos hang off assignment rows rather than assets, so the assignment
+ * services keep their DTOs key-only and the pages that display a photo call
+ * this per row. Keeping the signing at the read site means a list endpoint
+ * never pays for signatures on rows nobody is looking at.
+ */
+export async function signStorageUrl(key: string): Promise<string> {
+  return getStorage().getPresignedUrl(key);
 }
 
 /** Accepts either a database id or the human asset id (`IT-LAP-0001`), so QR scans resolve. */
@@ -46,6 +59,12 @@ function buildAssetWhere(query: ListAssetsQuery) {
             { assetId: { contains: query.q, mode: "insensitive" as const } },
             { serialNumber: { contains: query.q, mode: "insensitive" as const } },
             { description: { contains: query.q, mode: "insensitive" as const } },
+            // Brand and model were unreachable from the search box: the column
+            // existed and was editable, but "Dell" matched nothing. Both are
+            // separate columns rather than being folded into `description`, so
+            // they have to be named here to be findable at all.
+            { brand: { contains: query.q, mode: "insensitive" as const } },
+            { model: { contains: query.q, mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -57,6 +76,8 @@ function buildAssetWhere(query: ListAssetsQuery) {
           },
         }
       : {}),
+    ...(query.brand ? { brand: query.brand } : {}),
+    ...(query.model ? { model: query.model } : {}),
     ...(query.assignedTo
       ? {
           assignments: {
@@ -101,6 +122,242 @@ export async function getAsset(idOrAssetId: string): Promise<AssetDetailDto> {
   return toAssetDetailDto(asset, await signImage(asset.imageKey));
 }
 
+/**
+ * What an unauthenticated visitor may read from a scanned tag.
+ *
+ * A narrower DTO than `AssetDetailDto` on purpose. The QR on a printed label is
+ * a public URL, so anything this shape carries is readable by anyone who has
+ * the tag — which rules out the assignment history, the return photos, and the
+ * database id that the internal detail page shows. The current holder's name and
+ * department are included deliberately: "is this the laptop I signed for" is the
+ * question a scan is actually asking, and the register is not a secret.
+ */
+export interface PublicAssetDto {
+  assetId: string;
+  description: string;
+  brand: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  status: string;
+  imageUrl: string | null;
+  assetType: { name: string; code: string };
+  /** Current holder, or null when the asset is not out. */
+  assignedTo: { name: string; department: string } | null;
+  createdAt: string;
+}
+
+/**
+ * Public read for the tag's QR destination, with no session required.
+ *
+ * Selects its own columns rather than calling `getAsset` and dropping fields:
+ * the detail query pulls every assignment row with three staff joins each, and
+ * throwing that away afterwards would still have read it from the database. This
+ * asks for the eight fields the card shows and nothing else.
+ *
+ * Resolves the identifier the same way `getAsset` does, so a scanned
+ * `IT-LAP-0001` and a clicked cuid both work.
+ */
+export async function getPublicAsset(
+  idOrAssetId: string,
+): Promise<PublicAssetDto | null> {
+  const asset = await prisma.asset.findUnique({
+    where: toAssetWhere(idOrAssetId),
+    select: {
+      assetId: true,
+      description: true,
+      brand: true,
+      model: true,
+      serialNumber: true,
+      status: true,
+      imageKey: true,
+      createdAt: true,
+      assetType: { select: { name: true, code: true } },
+      assignments: {
+        where: { dateReturned: null },
+        orderBy: { dateAssigned: "desc" },
+        take: 1,
+        select: {
+          staff: { select: { name: true, department: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+
+  if (!asset) return null;
+
+  const holder = asset.assignments[0]?.staff ?? null;
+
+  return {
+    assetId: asset.assetId,
+    description: asset.description,
+    brand: asset.brand,
+    model: asset.model,
+    serialNumber: asset.serialNumber,
+    status: asset.status,
+    imageUrl: await signImage(asset.imageKey),
+    assetType: asset.assetType,
+    assignedTo: holder
+      ? { name: holder.name, department: holder.department.name }
+      : null,
+    createdAt: asset.createdAt.toISOString(),
+  };
+}
+
+/** One serial that could not be registered, and why. */
+export interface SkippedAsset {
+  serial: string;
+  reason: string;
+}
+
+export interface CreatedAsset {
+  assetId: string;
+  /** Which serial this asset was created for, so the two can always be paired. */
+  serial: string;
+}
+
+export interface BulkAssetResult {
+  created: CreatedAsset[];
+  skipped: SkippedAsset[];
+}
+
+/**
+ * Registers a whole column of serials at once.
+ *
+ * Conflicts are found *before* anything is written, rather than by catching the
+ * unique violation as it happens. Two reasons, both practical:
+ *
+ * - A failed statement aborts the surrounding Postgres transaction, so letting one
+ *   duplicate raise would roll back the other ninety-nine. Screening first means
+ *   the write transaction only ever runs statements that succeed.
+ * - The person gets told exactly which serials were refused and why, instead of a
+ *   generic failure for the whole batch. Registering ninety of a hundred is far
+ *   more useful than registering none and asking them to find the typo.
+ *
+ * The check is a single `IN` query rather than one lookup per serial, so a hundred
+ * rows cost one extra round trip rather than a hundred.
+ *
+ * Duplicates *within* the submitted column are caught the same way: a serial typed
+ * twice on the sheet would otherwise fail against the row the same submission just
+ * created. The first occurrence wins, so the asset ids still run down the column
+ * in the order the person read them off.
+ */
+export async function createAssetsInBulk(
+  input: BulkAssetSubmitInput,
+  image?: ParsedImage,
+): Promise<BulkAssetResult> {
+  const assetType = await prisma.assetType.findFirst({
+    where: {
+      OR: [
+        { code: { equals: input.assetType, mode: "insensitive" } },
+        { id: input.assetType },
+      ],
+    },
+  });
+
+  if (!assetType) {
+    throw ApiError.unprocessable(`Unknown asset type "${input.assetType}"`);
+  }
+
+  const skipped: SkippedAsset[] = [];
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  for (const serial of input.serials) {
+    if (seen.has(serial)) {
+      skipped.push({ serial, reason: "Entered more than once in this batch" });
+      continue;
+    }
+    seen.add(serial);
+    candidates.push(serial);
+  }
+
+  const existing = await prisma.asset.findMany({
+    where: { serialNumber: { in: candidates } },
+    select: { serialNumber: true },
+  });
+  const taken = new Set(existing.map((row) => row.serialNumber));
+
+  const accepted = candidates.filter((serial) => {
+    if (!taken.has(serial)) return true;
+    skipped.push({ serial, reason: "Already on the register" });
+    return false;
+  });
+
+  const created: CreatedAsset[] = [];
+
+  if (accepted.length > 0) {
+    try {
+      created.push(
+        ...(await prisma.$transaction(async (tx) => {
+          const rows: CreatedAsset[] = [];
+          for (const serialNumber of accepted) {
+            const assetId = await reserveAssetId(tx, assetType.id, assetType.code);
+            const row = await tx.asset.create({
+              data: {
+                assetId,
+                assetTypeId: assetType.id,
+                description: input.name,
+                brand: input.brand,
+                model: input.model ?? null,
+                serialNumber,
+                status: input.status ?? "AVAILABLE",
+              },
+              select: { assetId: true },
+            });
+            rows.push({ assetId: row.assetId, serial: serialNumber });
+          }
+          return rows;
+        })),
+      );
+    } catch (error) {
+      throw fromPrismaError(error, "create assets");
+    }
+  }
+
+  // The photo is attached here rather than by the caller looping
+  // `replaceAssetImage`, for two reasons. It would otherwise put one
+  // "uploaded image" audit event per row on top of the single batch event below,
+  // which is exactly the per-row noise this function exists to avoid. And the
+  // rows only exist by the time the transaction has committed, so there is
+  // nothing to attach to before then.
+  //
+  // One object is stored per asset rather than one shared across the batch. A
+  // shared key would be cheaper, but `removeAssetImage` deletes the object it
+  // points at: taking the photo off one asset would leave the other nineteen
+  // pointing at a deleted file. Per-asset keys keep that operation safe.
+  if (image && created.length > 0) {
+    for (const row of created) {
+      await attachImageTo(row.assetId, image);
+    }
+  }
+
+  // One audit event for the batch rather than one per row: a hundred-asset entry
+  // would otherwise bury every other event in the trail under a hundred identical
+  // "created asset" lines. The ids are on the event, so the detail is still there.
+  await recordAudit({
+    action: AUDIT_ACTIONS.ASSET_CREATED,
+    entityType: "ASSET",
+    entityId: created[0]?.assetId ?? assetType.id,
+    summary: `Registered ${created.length} asset${created.length === 1 ? "" : "s"} (${assetType.code})${
+      skipped.length > 0 ? `, ${skipped.length} skipped` : ""
+    }`,
+    metadata: {
+      assetType: assetType.code,
+      description: input.name,
+      brand: input.brand,
+      count: created.length,
+      assets: created,
+      skipped,
+      // Recorded as a boolean rather than the keys themselves: they are
+      // derivable from the asset ids, and the audit trail has no reason to carry
+      // twenty near-identical strings.
+      imageAttached: Boolean(image) && created.length > 0,
+    },
+  });
+
+  return { created, skipped };
+}
+
 export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {
   const assetType = await prisma.assetType.findFirst({
     where: {
@@ -123,11 +380,15 @@ export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {
         data: {
           assetId,
           assetTypeId: assetType.id,
-          description: input.description,
-          unit: input.unit,
-          // "" is normalised to null by the validator so serial-less bulk items
-          // do not collide on the unique constraint.
-          serialNumber: input.serialNumber ?? null,
+          // Stored as typed. Folding the brand in as "Name (Brand)" made the
+          // same word live in two columns and put it on the printed label twice
+          // over; `brand` is its own column now.
+          description: input.name,
+          brand: input.brand,
+          model: input.model ?? null,
+          // Required on registration, so there is no "" to normalise here any
+          // more: a serial-less item cannot be registered in the first place.
+          serialNumber: input.serialNumber,
           status: input.status,
         },
         include: assetInclude,
@@ -143,7 +404,8 @@ export async function createAsset(input: CreateAssetInput): Promise<AssetDto> {
         assetId: created.assetId,
         assetType: assetType.code,
         description: created.description,
-        unit: created.unit,
+        brand: created.brand,
+        model: created.model,
         serialNumber: created.serialNumber,
         status: created.status,
       },
@@ -170,11 +432,21 @@ export async function updateAsset(
 
   let updated: AssetRecord;
   try {
+    const description =
+      input.name !== undefined || input.brand !== undefined
+        ? (() => {
+            const name = input.name ?? existing.description.replace(/\s*\([^)]*\)$/, "");
+            const brand = input.brand !== undefined ? input.brand : existing.brand;
+            return brand ? `${name} (${brand})` : name;
+          })()
+        : undefined;
+
     updated = await prisma.asset.update({
       where: { id: existing.id },
       data: {
-        ...(input.description !== undefined ? { description: input.description } : {}),
-        ...(input.unit !== undefined ? { unit: input.unit } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(input.brand !== undefined ? { brand: input.brand } : {}),
+        ...(input.model !== undefined ? { model: input.model } : {}),
         ...(input.serialNumber !== undefined ? { serialNumber: input.serialNumber } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
       },
@@ -240,6 +512,32 @@ export async function retireAsset(idOrAssetId: string): Promise<AssetDto> {
  * object. If the database write fails the fresh upload is removed again so no
  * orphan is left behind in the bucket.
  */
+/**
+ * Points a freshly created asset at an uploaded object.
+ *
+ * Distinct from `replaceAssetImage` because there is nothing to replace: the row
+ * was created a moment ago and has no previous key, so there is no old object to
+ * delete and no separate audit event worth writing — the creation event already
+ * records that the asset exists.
+ *
+ * The upload happens before the database write so a failure leaves the reverse
+ * problem to clean up, which is the one that can actually orphan bytes in the
+ * bucket: if the write fails, the fresh object is removed again.
+ */
+async function attachImageTo(assetId: string, file: ParsedImage): Promise<void> {
+  const storage = getStorage();
+  const key = buildObjectKey(assetId, file.extension);
+
+  await storage.uploadObject({ key, body: file.buffer, contentType: file.contentType });
+
+  try {
+    await prisma.asset.updateMany({ where: { assetId }, data: { imageKey: key } });
+  } catch (error) {
+    await storage.deleteObject(key).catch(() => undefined);
+    throw fromPrismaError(error, "attach asset image");
+  }
+}
+
 export async function replaceAssetImage(
   idOrAssetId: string,
   file: ParsedImage,
@@ -326,13 +624,10 @@ export interface AssetLabelDto {
   device: string;
   /**
    * Position among the assets of this same type, counted in asset-id order.
-   * This is deliberately *not* `Asset.unit`: that column is a quantity ("six of
-   * these"), which on its own would print `006 of 250` for an asset that has
-   * nothing to do with being the six hundredth thing on the shelf.
+   * This is a rank on the register, not a quantity: one row is one physical item,
+   * so there is no "six of these" for it to be confused with.
    */
   position: number;
-  /** Assets of this type on the register — the denominator in `01 of 20`. */
-  positionTotal: number;
   serialNumber: string | null;
 }
 
@@ -367,8 +662,14 @@ export async function listAssetsForLabels(
 
   // Positions come from the register's own ordering rather than from any column
   // on the asset, so the numbers are right without anyone having to maintain
-  // them. One ordered read per type covers both the totals and the ranks, which
-  // keeps a hundred labels at two queries instead of a hundred.
+  // them. One ordered read covers every requested type at once, which keeps a
+  // hundred labels at two queries instead of a hundred.
+  //
+  // Only the rank is counted, not the size of the fleet. The total used to ride
+  // along so the tag could print `01 of 20`, and it was the wrong number to put
+  // on a physical label: it counts the register as it stands today, so every tag
+  // printed before the next laptop was registered was already out of date. See
+  // `formatUnit`.
   const typeIds = [...new Set(rows.map((row) => row.assetTypeId))];
   const fleet =
     typeIds.length === 0
@@ -379,17 +680,12 @@ export async function listAssetsForLabels(
           orderBy: { assetId: "asc" },
         });
 
-  const totals = new Map<string, number>();
-  for (const row of fleet) {
-    totals.set(row.assetTypeId, (totals.get(row.assetTypeId) ?? 0) + 1);
-  }
-
   const seen = new Map<string, number>();
-  const rank = new Map<string, { position: number; total: number }>();
+  const rank = new Map<string, number>();
   for (const row of fleet) {
     const position = (seen.get(row.assetTypeId) ?? 0) + 1;
     seen.set(row.assetTypeId, position);
-    rank.set(row.assetId, { position, total: totals.get(row.assetTypeId) ?? 1 });
+    rank.set(row.assetId, position);
   }
 
   const byNumber = new Map(rows.map((row) => [row.assetId, row]));
@@ -402,8 +698,7 @@ export async function listAssetsForLabels(
       {
         assetId: row.assetId,
         device: row.assetType.name,
-        position: rank.get(row.assetId)?.position ?? 1,
-        positionTotal: rank.get(row.assetId)?.total ?? 1,
+        position: rank.get(row.assetId) ?? 1,
         serialNumber: row.serialNumber,
       },
     ];
@@ -422,6 +717,46 @@ export async function listAssetsForLabels(
  * a label run, and a thousand identifiers is a payload a thousand documents are
  * not.
  */
+/**
+ * The brand and model values actually in use, for the filter dropdowns.
+ *
+ * Read from the register rather than from a fixed list, because there is no
+ * other place these come from: the alternative is free text on the register
+ * form, which means the dropdown can only ever offer what somebody has already
+ * typed. `distinct` with a `NULL` filter so the "Any brand" list is not padded
+ * out with a blank row.
+ *
+ * Models are returned with the brand they were registered under, because the
+ * model dropdown narrows to the chosen brand and needs to know the pairing
+ * client-side to do it without another round trip.
+ */
+export async function listAssetFacets(): Promise<{
+  brands: string[];
+  models: { brand: string | null; model: string }[];
+}> {
+  const [brands, models] = await Promise.all([
+    prisma.asset.findMany({
+      where: { brand: { not: null } },
+      distinct: ["brand"],
+      select: { brand: true },
+      orderBy: { brand: "asc" },
+    }),
+    prisma.asset.findMany({
+      where: { model: { not: null } },
+      distinct: ["model", "brand"],
+      select: { brand: true, model: true },
+      orderBy: [{ brand: "asc" }, { model: "asc" }],
+    }),
+  ]);
+
+  return {
+    brands: brands.map((row) => row.brand!).filter(Boolean),
+    models: models
+      .filter((row): row is { brand: string | null; model: string } => Boolean(row.model))
+      .map((row) => ({ brand: row.brand, model: row.model })),
+  };
+}
+
 export async function listMatchingAssetIds(query: ListAssetsQuery): Promise<string[]> {
   const where = buildAssetWhere(query);
   const rows = await prisma.asset.findMany({ where, select: { assetId: true } });

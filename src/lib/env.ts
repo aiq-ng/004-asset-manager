@@ -52,6 +52,18 @@ const envSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters (openssl rand -base64 32)"),
+
+  // Transactional email (Resend). Optional on purpose: with no key the mailer
+  // degrades to logging what it would have sent, so the app still boots and the
+  // invite/reset flows stay testable locally.
+  RESEND_API_KEY: z.string().trim().default(""),
+  // Resend requires a verified sender. `onboarding@resend.dev` works for local
+  // testing only; set your own verified domain in production.
+  EMAIL_FROM: z
+    .string()
+    .trim()
+    .min(1)
+    .default("Inventory Control <onboarding@resend.dev>"),
 });
 
 export type Env = z.infer<typeof envSchema>;

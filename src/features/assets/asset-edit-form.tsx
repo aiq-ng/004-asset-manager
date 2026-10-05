@@ -4,7 +4,7 @@ import { useActionState } from "react";
 
 import { updateAssetAction } from "@/features/assets/actions";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Input, Select } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
@@ -23,7 +23,8 @@ export function AssetEditForm({
   asset: {
     assetId: string;
     description: string;
-    unit: number;
+    brand: string | null;
+    model: string | null;
     serialNumber: string | null;
     status: string;
   };
@@ -32,6 +33,12 @@ export function AssetEditForm({
   const [state, formAction] = useActionState(updateAssetAction, INITIAL_ACTION_STATE);
 
   const statusValue = state.data?.status ?? asset.status;
+
+  // React empties an uncontrolled form once its action returns, whether or not
+  // it succeeded, so every field here falls back to the record as it was. After a
+  // rejected save the values from `state` win; otherwise the record is what the
+  // form opens with.
+  const currentName = state.values?.name ?? asset.description.replace(/\s*\([^)]*\)$/, "");
 
   return (
     <form action={formAction} className="flex flex-col gap-c54-5">
@@ -44,44 +51,77 @@ export function AssetEditForm({
       ) : null}
 
       <Field
-        label="Description"
-        htmlFor="edit-description"
-        error={state.fieldErrors?.description}
+        label="Name"
+        htmlFor="edit-name"
+        error={state.fieldErrors?.name}
         required
       >
         {(field) => (
-          <Textarea {...field} id={field.id} name="description" rows={2} defaultValue={asset.description} />
+          <Input {...field} id={field.id} name="name" defaultValue={currentName} />
         )}
       </Field>
 
+      {/* Brand and model sit together because they are read together: one says
+          who made it, the other says which one. Two free-text fields side by
+          side is also the only way they ever get filled in consistently. */}
       <div className="grid gap-c54-5 sm:grid-cols-2">
-        <Field
-          label="Serial number"
-          htmlFor="edit-serial"
-          error={state.fieldErrors?.serialNumber}
-          hint="Blank is stored as NULL."
-        >
+        <Field label="Brand" htmlFor="edit-brand" error={state.fieldErrors?.brand}>
           {(field) => (
             <Input
               {...field}
               id={field.id}
-              name="serialNumber"
-              defaultValue={asset.serialNumber ?? ""}
+              name="brand"
+              defaultValue={state.values?.brand ?? asset.brand ?? ""}
+              placeholder="HP, Dell, Lenovo…"
             />
           )}
         </Field>
 
-        <Field label="Units" htmlFor="edit-unit" error={state.fieldErrors?.unit} required>
+        <Field label="Model" htmlFor="edit-model" error={state.fieldErrors?.model}>
           {(field) => (
-            <Input {...field} id={field.id} name="unit" type="number" min={1} step={1} defaultValue={asset.unit} />
+            <Input
+              {...field}
+              id={field.id}
+              name="model"
+              defaultValue={state.values?.model ?? asset.model ?? ""}
+              placeholder="Latitude 5440, ProBook 450…"
+            />
           )}
         </Field>
       </div>
 
       <Field
+        label="Serial number"
+        htmlFor="edit-serial"
+        error={state.fieldErrors?.serialNumber}
+        hint="Blank is stored as NULL."
+      >
+        {(field) => (
+          <Input
+            {...field}
+            id={field.id}
+            name="serialNumber"
+            defaultValue={state.values?.serialNumber ?? asset.serialNumber ?? ""}
+          />
+        )}
+      </Field>
+
+      <Field
         label="Status"
         htmlFor="edit-status"
         error={state.fieldErrors?.status}
+        // Re-keyed on what came back, so the status `<select>` inside is
+        // remounted: it only reads its `defaultValue` when it mounts, and the
+        // reset after a rejected save would otherwise put the status back to the
+        // record's.
+        //
+        // The key sits on `Field` rather than on the `Select` itself. A `<select>`
+        // with static `<option>` children is a shape React can validate at compile
+        // time; giving that element a dynamic key makes the compiler treat the
+        // children as an unkeyed list instead, and every render logs "Each child
+        // in a list should have a unique key prop". Keying the wrapper remounts
+        // exactly the same subtree and keeps that warning away.
+        key={state.values?.status ?? "unsubmitted"}
         hint={
           statusValue === "ASSIGNED"
             ? "Assigned assets return to available through their assignment, not here."
@@ -95,7 +135,7 @@ export function AssetEditForm({
             {...field}
             id={field.id}
             name="status"
-            defaultValue={asset.status}
+            defaultValue={state.values?.status ?? asset.status}
             disabled={!canChangeStatus || statusValue === "ASSIGNED"}
           >
             <option value="AVAILABLE">Available</option>

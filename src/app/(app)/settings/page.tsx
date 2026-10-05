@@ -50,10 +50,10 @@ export default async function SettingsPage() {
               </DetailRow>
               <DetailRow term="Password">
                 {passwordSet ? (
-                  "Set — you can change it above"
+                  "Set. Change it above."
                 ) : (
                   <span className="text-c54-text-warning">
-                    Not set — set one above to be able to sign in again later
+                    Not set. Set one above to sign in again later.
                   </span>
                 )}
               </DetailRow>
@@ -74,10 +74,18 @@ export default async function SettingsPage() {
               <PermissionRow
                 label="Assign and return assets, change asset status"
                 roles="Assigner and above"
+              /><PermissionRow
+                label="Register, edit and retire assets"
+                roles="Admin and above"
               />
-              <PermissionRow label="Register, edit and retire assets" roles="Admin and above" />
+              {/* Asset types and departments are separate rows because they are
+                  separate permissions with different floors: `assetType:manage` is
+                  ADMIN while `department:manage` is SUPERADMIN. Grouping them as
+                  one superadmin-only row told an admin the opposite of the truth
+                  about the half they can actually do. */}
+              <PermissionRow label="Manage asset types" roles="Admin and above" />
+              <PermissionRow label="Manage departments" roles="Super admin" />
               <PermissionRow label="Manage staff" roles="Super admin" />
-              <PermissionRow label="Manage asset types and departments" roles="Super admin" />
               <PermissionRow label="Read the audit trail" roles="Super admin" />
             </DescriptionList>
             <p className="mt-c54-4 text-c54-2xs text-c54-text-muted">

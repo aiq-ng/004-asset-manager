@@ -68,6 +68,102 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-assets_inventory}?schema=public
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-asset-images}
+      MINIO_PRESIGN_EXPIRY_SECONDS: ${MINIO_PRESIGN_EXPIRY_SECONDS:-3600}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      REDIS_URL: redis://redis:6379
+      AUDIT_REDIS_PREFIX: ${AUDIT_REDIS_PREFIX:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Drains the audit queue into PostgreSQL. The app only ever publishes events,
+  # so without this container the app is fully functional and the audit trail is
+  # permanently empty — which is the whole point of the trail. Run it as a service
+  # rather than a shell you remember to open.
+  #
+  # `restart: unless-stopped` is not optional: a worker killed with SIGKILL or
+  # OOM cannot clean up after itself in-process, and BullMQ does not always
+  # recover a worker whose socket died mid-flight. The restart policy is what
+  # makes that case self-healing, and it is why this is a service and not a
+  # documented `pnpm worker:audit` step.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-assets_inventory}?schema=public
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-asset-images}
+      MINIO_PRESIGN_EXPIRY_SECONDS: ${MINIO_PRESIGN_EXPIRY_SECONDS:-3600}
+      # The worker never signs a session, but `lib/env` validates the whole
+      # environment as one object and this key has no default, so the worker has
+      # to be given one to boot at all.
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      REDIS_URL: redis://redis:6379
+      AUDIT_REDIS_PREFIX: ${AUDIT_REDIS_PREFIX:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # A restart policy says nothing about whether the worker is *working*, so
+    # probe the heartbeat key it maintains. This is what `docker compose ps`
+    # reports, and it fails after ~45s of a wedged-but-alive worker — long
+    # before anyone notices an empty trail.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const Redis = require("ioredis");
+          const r = new Redis(process.env.REDIS_URL, {
+            maxRetriesPerRequest: 1,
+            enableReadyCheck: false,
+            connectTimeout: 2000,
+            ...(process.env.AUDIT_REDIS_PREFIX ? { keyPrefix: process.env.AUDIT_REDIS_PREFIX } : {}),
+          });
+          r.get("audit-log-queue:worker-heartbeat")
+            .then((v) => {
+              if (!v) throw new Error("no heartbeat recorded");
+              const age = Date.now() - Date.parse(v);
+              if (!(age >= 0 && age < 45000)) throw new Error("heartbeat is stale by " + age + "ms");
+              process.exit(0);
+            })
+            .catch((e) => {
+              console.error(e.message);
+              process.exit(1);
+            });
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
 volumes:
   postgres-data:
   minio-data:

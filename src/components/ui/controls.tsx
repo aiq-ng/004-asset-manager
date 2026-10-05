@@ -1,3 +1,6 @@
+import type { RefAttributes } from "react";
+import { ChevronDown } from "lucide-react";
+
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -15,10 +18,36 @@ export const CONTROL_BASE =
   "hover:border-c54-border-strong focus:border-c54-action-primary focus:outline-none " +
   "focus:ring-2 focus:ring-c54-action-primary/25 disabled:cursor-not-allowed disabled:bg-c54-bg-muted disabled:text-c54-text-muted";
 
+/**
+ * Error styling for a control.
+ *
+ * Written as `[&[aria-invalid=true]]` rather than a plain `border-c54-*` class
+ * because `CONTROL_BASE` already sets `border-c54-border-default` and the two
+ * are equal-specificity `border-color` utilities. Which one wins is decided by
+ * their order in the *generated stylesheet*, not by the order they are passed to
+ * `cn()` — and Tailwind emits `border-default` after `border-danger`, so the
+ * plain version silently lost and no invalid control ever showed a red border.
+ * The attribute variant compiles to a two-selector rule that outranks a single
+ * class, so the error state wins on specificity instead of on a coincidence of
+ * stylesheet order that a Tailwind upgrade could undo.
+ *
+ * Every control that applies this also sets `aria-invalid`, so the styling and
+ * the announced state cannot come apart.
+ */
 export const CONTROL_INVALID =
-  "border-c54-border-danger focus:border-c54-action-danger focus:ring-c54-action-danger/25";
+  "[&[aria-invalid=true]]:border-c54-border-danger " +
+  "[&[aria-invalid=true]]:focus:border-c54-action-danger " +
+  "[&[aria-invalid=true]]:focus:ring-c54-action-danger/25";
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement>,
+    /**
+     * `ref` is accepted explicitly for the same reason it is on `Checkbox`: some
+     * callers need the element itself rather than its value — focusing the next
+     * field of a repeating entry, for instance, which cannot be done from the
+     * React tree alone.
+     */
+    RefAttributes<HTMLInputElement> {
   invalid?: boolean;
   /** Rendered inside the field, on the right. */
   trailing?: React.ReactNode;
@@ -120,9 +149,5 @@ export function Checkbox({
 }
 
 export function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" className={cn("size-4", className)} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 6.5 8 10.5 12 6.5" />
-    </svg>
-  );
+  return <ChevronDown aria-hidden="true" className={cn("size-4", className)} />;
 }

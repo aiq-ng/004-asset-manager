@@ -1,15 +1,16 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus } from "lucide-react";
 
 import { createAssetTypeAction, updateAssetTypeAction } from "@/features/asset-types/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { Dialog, DialogCancelButton, DialogCloseOnSuccess } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
 import { formatAssetId } from "@/lib/services/asset-id";
 import { cn } from "@/lib/utils/cn";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
@@ -76,8 +77,15 @@ function AssetIdPreview({ code }: { code: string }) {
  * open starts clean.
  */
 function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
-  const [state, formAction] = useActionState(createAssetTypeAction, INITIAL_ACTION_STATE);
-  const [code, setCode] = useState("");
+  const [state, formAction, pending] = useActionState(
+    createAssetTypeAction,
+    INITIAL_ACTION_STATE,
+  );
+  // The preview reads what came back after a rejected submission, so it keeps
+  // showing the code being entered instead of dropping back to the placeholder.
+  // The fallback to local state is what makes typing still drive it.
+  const [typedCode, setTypedCode] = useState("");
+  const code = state.values?.code ?? typedCode;
 
   return (
     <Dialog
@@ -86,11 +94,12 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
       side="right"
       title="Add an asset type"
       description="A category that supplies the asset id prefix."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="asset-type-create-form" pendingLabel="Creating…">
-            <Icons.Plus className="size-3.5" />
+          <SubmitButton form="asset-type-create-form" pendingLabel="Creating…" pending={pending}>
+            <Plus className="size-3.5" />
             Add type
           </SubmitButton>
         </>
@@ -107,7 +116,15 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
           hint="Shown wherever a type is picked, so write it the way people would say it."
           required
         >
-          {(field) => <Input {...field} id={field.id} name="name" placeholder="Laptop" />}
+          {(field) => (
+            <Input
+              {...field}
+              id={field.id}
+              name="name"
+              placeholder="Laptop"
+              defaultValue={state.values?.name ?? ""}
+            />
+          )}
         </Field>
 
         <Field
@@ -125,7 +142,8 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
               placeholder="LAP"
               maxLength={4}
               className="font-c54-mono uppercase"
-              onChange={(event) => setCode(event.target.value)}
+              defaultValue={state.values?.code ?? ""}
+              onChange={(event) => setTypedCode(event.target.value)}
             />
           )}
         </Field>
@@ -142,16 +160,19 @@ function AssetTypeCreateDialog({ onClose }: { onClose: () => void }) {
  * Mounted on open only, so dismissing and reopening starts from a clean action
  * state instead of leaving the previous submission's errors on screen.
  */
-export function AssetTypeCreateButton() {
-  const [open, setOpen] = useState(false);
+export function AssetTypeCreateButton({ openInitially = false }: { openInitially?: boolean }) {
+  const [open, setOpen] = useState(openInitially);
   // Stable, so the close-on-success effect inside the sheet only reacts to the
   // state actually changing rather than to a fresh arrow on every render.
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add type
       </Button>
       {open ? <AssetTypeCreateDialog onClose={close} /> : null}
@@ -173,7 +194,10 @@ export function AssetTypeEditDialog({
   assetType: AssetTypeRow;
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(updateAssetTypeAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(
+    updateAssetTypeAction,
+    INITIAL_ACTION_STATE,
+  );
   const codeLocked = assetType.assetCount > 0;
 
   return (
@@ -182,10 +206,11 @@ export function AssetTypeEditDialog({
       onClose={onClose}
       title="Edit asset type"
       description={`${assetType.assetCount} ${assetType.assetCount === 1 ? "asset uses" : "assets use"} this type.`}
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="asset-type-edit-form" pendingLabel="Saving…">
+          <SubmitButton form="asset-type-edit-form" pendingLabel="Saving…" pending={pending}>
             Save
           </SubmitButton>
         </>
@@ -197,8 +222,12 @@ export function AssetTypeEditDialog({
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
         <Field label="Name" htmlFor="edit-type-name" error={state.fieldErrors?.name} required>
-          {(field) => (
-            <Input {...field} id={field.id} name="name" defaultValue={assetType.name} />
+          {(field) => (<Input
+              {...field}
+              id={field.id}
+              name="name"
+              defaultValue={state.values?.name ?? assetType.name}
+            />
           )}
         </Field>
 
@@ -217,7 +246,7 @@ export function AssetTypeEditDialog({
               {...field}
               id={field.id}
               name="code"
-              defaultValue={assetType.code}
+              defaultValue={state.values?.code ?? assetType.code}
               disabled={codeLocked}
               maxLength={4}
               className="font-c54-mono uppercase"
@@ -236,7 +265,7 @@ export function AssetTypeRowActions({ assetType }: { assetType: AssetTypeRow }) 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Edit
       </Button>
       {open ? <AssetTypeEditDialog assetType={assetType} onClose={() => setOpen(false)} /> : null}

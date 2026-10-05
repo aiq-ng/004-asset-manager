@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Icons } from "@/components/ui/icons";
 
 /**
  * App-wide 403.
@@ -20,7 +20,7 @@ export default function Forbidden() {
             aria-hidden="true"
             className="flex size-11 items-center justify-center rounded-c54-full bg-c54-bg-danger text-c54-text-danger"
           >
-            <Icons.Shield className="size-5" />
+            <ShieldCheck className="size-5" />
           </span>
 
           <div>
@@ -34,7 +34,7 @@ export default function Forbidden() {
           <div className="flex flex-wrap items-center justify-center gap-c54-2">
             <Link href="/">
               <Button size="sm">
-                <Icons.ArrowLeft className="size-3.5" />
+                <ArrowLeft className="size-3.5" />
                 Back to dashboard
               </Button>
             </Link>

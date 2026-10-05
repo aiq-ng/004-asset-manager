@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Inter } from "next/font/google";
 
 import { ThemeModeProvider, themeModeBootstrapScript } from "@/components/providers/theme-mode-provider";
 import { ToastProvider } from "@/components/providers/toast-provider";
@@ -19,16 +19,6 @@ const inter = Inter({
   axes: ["opsz"],
 });
 
-/**
- * Mono stays on Geist Mono: asset ids and audit hashes want flat, unambiguous
- * glyphs, and Inter's tabular figures are for numbers, not for code chips.
- */
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   title: {
     default: "Inventory",
@@ -37,6 +27,14 @@ export const metadata: Metadata = {
   description: "Track hardware, hand it out, and keep the trail.",
   applicationName: "Inventory",
   robots: { index: false, follow: false },
+  // The C54 News mark, the same file the masthead and the printed tag use, so the
+  // tab and the sidebar agree. Declared rather than dropped in as
+  // `app/favicon.ico`: an .ico has to be rasterised by hand at four sizes, and
+  // this is the brand asset at the size it was drawn.
+  icons: {
+    icon: [{ url: "/images/logo.png", type: "image/png" }],
+    apple: [{ url: "/images/logo.png", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -63,7 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       data-c54-theme="wire-desk"
       suppressHydrationWarning
-      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} h-full antialiased`}
     >
       <head>
         <script

@@ -1,44 +1,45 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { RefreshCw } from "lucide-react";
 
-import { returnAssetAction } from "@/features/assets/actions";
-import { ConfirmDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
-import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
+import { ReturnAssetDialog } from "@/features/assignments/return-asset-dialog";
 
 /**
- * Record the return of an assigned asset.
+ * Record the return of an assigned asset, from a row in the assignments table.
  *
- * Confirmation is not optional here: `returnAssignment` closes the assignment
- * row, and there is no way to reopen it — a mistake means creating a new
- * assignment instead.
+ * Confirmation is not optional here: a return closes the assignment row and
+ * there is no way to reopen it — a mistake means creating a new assignment
+ * instead. The sheet is the same one the asset detail page opens, mounted only
+ * while `open` so that each return starts from a clean form.
  */
-export function ReturnButton({ assignmentId, assetId }: { assignmentId: string; assetId: string }) {
+export function ReturnButton({
+  assignmentId,
+  assetId,
+  holderName,
+}: {
+  assignmentId: string;
+  assetId: string;
+  holderName: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [state, action] = useActionState(returnAssetAction, INITIAL_ACTION_STATE);
 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Refresh className="size-3.5" />
+        <RefreshCw className="size-3.5" />
         <span className="sr-only sm:not-sr-only">Return</span>
       </Button>
 
-      <ConfirmDialog
-        open={open && !state.ok}
-        onClose={() => setOpen(false)}
-        title="Record this return?"
-        description={`${assetId} comes back and becomes available again. The assignment is closed permanently.`}
-        confirmLabel="Record return"
-        variant="secondary"
-        action={action}
-        fields={{ assignmentId }}
-      >
-        {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
-      </ConfirmDialog>
+      {open ? (
+        <ReturnAssetDialog
+          assignmentId={assignmentId}
+          assetId={assetId}
+          holderName={holderName}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

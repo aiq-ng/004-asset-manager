@@ -16,7 +16,11 @@ export const assetInclude = {
     where: { dateReturned: null },
     orderBy: { dateAssigned: "desc" },
     take: 1,
-    include: { staff: { select: staffSelect } },
+    include: {
+      staff: { select: staffSelect },
+      assignedBy: { select: staffSelect },
+      returnedBy: { select: staffSelect },
+    },
   },
 } satisfies Prisma.AssetInclude;
 
@@ -25,13 +29,19 @@ export const assetWithHistoryInclude = {
   ...assetInclude,
   assignments: {
     orderBy: { dateAssigned: "desc" },
-    include: { staff: { select: staffSelect } },
+    include: {
+      staff: { select: staffSelect },
+      assignedBy: { select: staffSelect },
+      returnedBy: { select: staffSelect },
+    },
   },
 } satisfies Prisma.AssetInclude;
 
 export const assignmentInclude = {
   asset: { include: { assetType: { select: { id: true, name: true, code: true } } } },
   staff: { select: staffSelect },
+  assignedBy: { select: staffSelect },
+  returnedBy: { select: staffSelect },
 } satisfies Prisma.AssignmentInclude;
 
 export type AssetRecord = Prisma.AssetGetPayload<{ include: typeof assetInclude }>;
@@ -49,6 +59,14 @@ type AssignmentRow = {
   dateReturned: Date | null;
   note: string | null;
   staff: StaffRecord;
+  /** Null only for rows written before this was recorded. */
+  assignedBy: StaffRecord | null;
+  /** Condition description captured when the assignment was closed. */
+  returnNote: string | null;
+  /** Storage key of the photo taken as the asset came back. */
+  returnImageKey: string | null;
+  /** Who accepted the return; null for legacy rows and still-open assignments. */
+  returnedBy: StaffRecord | null;
 };
 
 export interface StaffDto {
@@ -76,13 +94,22 @@ export interface AssignmentDto {
   dateReturned: string | null;
   note: string | null;
   staff: StaffDto;
+  /** Who handed the asset over; null for legacy rows. */
+  assignedBy: StaffDto | null;
+  /** Condition description captured at return; null while still out or legacy. */
+  returnNote: string | null;
+  /** Storage key of the return photo; null while still out or legacy. */
+  returnImageKey: string | null;
+  /** Who accepted the return; null while still out or legacy. */
+  returnedBy: StaffDto | null;
 }
 
 export interface AssetDto {
   id: string;
   assetId: string;
   description: string;
-  unit: number;
+  brand: string | null;
+  model: string | null;
   serialNumber: string | null;
   status: string;
   imageKey: string | null;
@@ -117,19 +144,33 @@ function toAssignmentDto(row: AssignmentRow): AssignmentDto {
     dateReturned: row.dateReturned ? row.dateReturned.toISOString() : null,
     note: row.note,
     staff: toStaffDto(row.staff),
+    assignedBy: row.assignedBy ? toStaffDto(row.assignedBy) : null,
+    returnNote: row.returnNote,
+    returnImageKey: row.returnImageKey,
+    returnedBy: row.returnedBy ? toStaffDto(row.returnedBy) : null,
   };
 }
 
 type AssetRow = AssetRecord | AssetWithHistory;
 
 function toAssetBase(asset: AssetRow, imageUrl: string | null): AssetDto {
-  const active = asset.assignments[0] ?? null;
+  // The *open* assignment, which is not the same as the newest row.
+  //
+  // `assetInclude` filters to `dateReturned: null` at the database, but
+  // `assetWithHistoryInclude` overrides that clause to return every assignment
+  // for the timeline, so on the detail page this list still contains closed
+  // ones. Taking `[0]` there handed back the most recent assignment whatever its
+  // state, which left the detail panel showing a holder who had already returned
+  // the asset, together with a Record return button for a row that was closed.
+  // Finding the open one here keeps the two include variants interchangeable.
+  const active = asset.assignments.find((row) => row.dateReturned === null) ?? null;
 
   return {
     id: asset.id,
     assetId: asset.assetId,
     description: asset.description,
-    unit: asset.unit,
+    brand: asset.brand,
+    model: asset.model,
     serialNumber: asset.serialNumber,
     status: asset.status,
     imageKey: asset.imageKey,

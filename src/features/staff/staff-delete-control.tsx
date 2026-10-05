@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Trash } from "lucide-react";
 
 import { deleteStaffAction } from "@/features/staff/actions";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
 /**
@@ -59,8 +59,8 @@ export function StaffDeleteControl({
         ) : null}
 
         <p className="text-c54-xs text-c54-text-secondary">
-          Deletes the account permanently. Assignment history survives — it is part of the
-          audit trail — but the person can no longer sign in or hold assets.
+          Deletes the account for good. The person can no longer sign in or hold assets.
+          Assignment history is kept for the audit trail.
         </p>
 
         <div>
@@ -70,7 +70,7 @@ export function StaffDeleteControl({
             onClick={() => setOpen(true)}
             disabled={blocked}
           >
-            <Icons.Trash className="size-3.5" />
+            <Trash className="size-3.5" />
             Delete account
           </Button>
         </div>

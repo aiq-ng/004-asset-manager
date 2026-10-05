@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState } from "react";
 
 import { assignAssetAction } from "@/features/assets/actions";
 import { Dialog, DialogCancelButton, DialogCloseOnSuccess } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/controls";
+import { Textarea } from "@/components/ui/controls";
+import { Combobox } from "@/components/ui/combobox";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
@@ -41,22 +42,7 @@ export function AssignAssetDialog({
   assetId: string;
   staff: StaffListOption[];
 }) {
-  const [state, formAction] = useActionState(assignAssetAction, INITIAL_ACTION_STATE);
-  const [search, setSearch] = useState("");
-
-  const candidates = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const matching = needle
-      ? staff.filter(
-          (person) =>
-            person.name.toLowerCase().includes(needle) ||
-            person.email.toLowerCase().includes(needle) ||
-            person.department.toLowerCase().includes(needle),
-        )
-      : staff;
-
-    return matching.slice(0, 100);
-  }, [staff, search]);
+  const [state, formAction, pending] = useActionState(assignAssetAction, INITIAL_ACTION_STATE);
 
   return (
     <Dialog
@@ -65,10 +51,15 @@ export function AssignAssetDialog({
       side="right"
       title="Assign asset"
       description={`Hand ${assetId} to a member of staff.`}
+      // Assigning flips the asset's status, so the sheet should not be dismissable
+      // over a request that is still running.
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="assign-asset-form" pendingLabel="Assigning…">
+          {/* `pending` is passed because this button is in the footer, outside the
+              form below, where `useFormStatus` cannot see it. See `SubmitButton`. */}
+          <SubmitButton form="assign-asset-form" pendingLabel="Assigning…" pending={pending}>
             Assign
           </SubmitButton>
         </>
@@ -76,43 +67,45 @@ export function AssignAssetDialog({
     >
       <DialogCloseOnSuccess when={state.ok} />
       <form id="assign-asset-form" action={formAction} className="flex flex-col gap-c54-4">
+        {/* Seeded from the last submission: React empties the form once the action
+            returns, so a rejected assignment would otherwise arrive having thrown
+            away the person chosen and the note describing the handover. */}
         <input type="hidden" name="assetId" value={assetId} />
 
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
-
-        <Field label="Filter list" htmlFor="assign-filter">
-          {(field) => (
-            <Input
-              {...field}
-              id={field.id}
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, email or department"
-            />
-          )}
-        </Field>
 
         <Field
           label="Staff member"
           htmlFor="assign-staff"
           error={state.fieldErrors?.staffId}
-          hint={
-            candidates.length === 0
-              ? "Nobody matches that filter. Only staff you are allowed to assign to are listed."
-              : `${candidates.length} available`
-          }
+          hint="Only staff you are allowed to assign to are listed."
           required
         >
           {(field) => (
-            <Select {...field} id={field.id} name="staffId" invalid={field.invalid} defaultValue="">
-              <option value="">Choose someone…</option>
-              {candidates.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} — {person.department}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              {...field}
+              id={field.id}
+              name="staffId"
+              invalid={field.invalid}
+              // Re-keyed on the echoed choice, because the combobox takes its
+              // `defaultValue` once at mount: the reset after a failed action
+              // would otherwise put the box back to the placeholder and leave the
+              // person who had been chosen needing to be picked a second time.
+              key={state.values?.staffId ?? "unsubmitted"}
+              defaultValue={state.values?.staffId ?? ""}
+              placeholder="Choose someone…"
+              searchPlaceholder="Name, email or department"
+              emptyMessage="Nobody matches that filter."
+              options={staff.map((person) => ({
+                value: person.id,
+                label: `${person.name} (${person.department})`,
+                // The hint above promises email search, so it searches email.
+                // Before this it matched the label only, which is name and
+                // department — the one field it said it would find was the one
+                // it could not.
+                searchKeys: [person.email],
+              }))}
+            />
           )}
         </Field>
 
@@ -123,7 +116,13 @@ export function AssignAssetDialog({
           hint="Optional. Recorded against the assignment and in the audit trail."
         >
           {(field) => (
-            <Textarea {...field} id={field.id} name="note" placeholder="Condition at handover…" />
+            <Textarea
+              {...field}
+              id={field.id}
+              name="note"
+              placeholder="Condition at handover…"
+              defaultValue={state.values?.note ?? ""}
+            />
           )}
         </Field>
       </form>

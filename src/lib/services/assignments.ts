@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { AUDIT_ACTIONS } from "@/lib/audit/events";
 import { recordAudit } from "@/lib/audit/context";
 import { ApiError, fromPrismaError } from "@/lib/errors";
+import { buildAssignmentObjectKey, getStorage } from "@/lib/storage";
 import { requireAssignableTarget, type Actor } from "@/lib/auth/permissions";
+import type { ParsedImage } from "@/lib/services/images";
 import {
   assignmentInclude,
   toStaffDto,
@@ -11,6 +13,7 @@ import {
 import type {
   CreateAssignmentInput,
   ListAssignmentsQuery,
+  ReturnAssignmentInput,
 } from "@/lib/validators/assignment";
 
 export interface AssignmentDto {
@@ -33,6 +36,22 @@ export interface AssignmentDto {
     email: string;
     phone: string | null;
   };
+  /** Who handed the asset over; null for rows written before this was recorded. */
+  assignedBy: {
+    id: string;
+    name: string;
+    department: string;
+  } | null;
+  /** Condition description captured at return; null while still out or legacy. */
+  returnNote: string | null;
+  /** Storage key of the return photo; null while still out or legacy. */
+  returnImageKey: string | null;
+  /** The privileged actor who accepted the return; null while still out or legacy. */
+  returnedBy: {
+    id: string;
+    name: string;
+    department: string;
+  } | null;
 }
 
 function toDto(row: AssignmentRecord): AssignmentDto {
@@ -50,6 +69,22 @@ function toDto(row: AssignmentRecord): AssignmentDto {
       status: row.asset.status,
     },
     staff: toStaffDto(row.staff),
+    assignedBy: row.assignedBy
+      ? {
+          id: row.assignedBy.id,
+          name: row.assignedBy.name,
+          department: row.assignedBy.department.name,
+        }
+      : null,
+    returnNote: row.returnNote,
+    returnImageKey: row.returnImageKey,
+    returnedBy: row.returnedBy
+      ? {
+          id: row.returnedBy.id,
+          name: row.returnedBy.name,
+          department: row.returnedBy.department.name,
+        }
+      : null,
   };
 }
 
@@ -106,6 +141,9 @@ export async function createAssignment(
           assetId: asset.id,
           staffId: staff.id,
           note: input.note ?? null,
+          // The assigner is the authenticated actor, taken from the session —
+          // never from the request body.
+          assignedById: actor.id,
         },
       });
 
@@ -136,6 +174,7 @@ export async function createAssignment(
         assetDbId: asset.id,
         staffId: staff.id,
         staffRole: staff.role,
+        assignedById: actor.id,
         note: assignment.note,
       },
     });
@@ -146,8 +185,26 @@ export async function createAssignment(
   }
 }
 
-/** Closes an assignment and puts the asset back into the pool. History is kept. */
-export async function returnAssignment(id: string): Promise<AssignmentDto> {
+/**
+ * Closes an assignment and puts the asset back into the pool. History is kept.
+ *
+ * The closing actor is the session's own identity, stored as `returnedById` —
+ * the "return accepted by" record the UI shows on the history timeline. The
+ * condition note and the return photo (an identification record of how the asset
+ * came back, in the same bucket as asset photos) are optional: a return can be
+ * recorded without either, and the row must never be un-writable because an
+ * optional detail was missing.
+ *
+ * The photo is uploaded before the transaction, mirroring `replaceAssetImage`:
+ * if the database write fails, the fresh object is removed again so no orphan is
+ * left behind in the bucket.
+ */
+export async function returnAssignment(
+  id: string,
+  /** Validated note plus the already-parsed image; the REST route passes no image. */
+  input: ReturnAssignmentInput & { image?: ParsedImage },
+  actor: Actor,
+): Promise<AssignmentDto> {
   const assignment = await prisma.assignment.findUnique({ where: { id } });
   if (!assignment) throw ApiError.notFound(`Assignment ${id} not found`);
 
@@ -155,11 +212,29 @@ export async function returnAssignment(id: string): Promise<AssignmentDto> {
     throw ApiError.unprocessable("Assignment has already been returned");
   }
 
+  let imageKey: string | null = null;
+  if (input.image) {
+    const storage = getStorage();
+    imageKey = buildAssignmentObjectKey(id, input.image.extension);
+    await storage.uploadObject({
+      key: imageKey,
+      body: input.image.buffer,
+      contentType: input.image.contentType,
+    });
+  }
+
   try {
     const updated = await prisma.$transaction(async (tx) => {
       const returned = await tx.assignment.update({
         where: { id },
-        data: { dateReturned: new Date() },
+        data: {
+          dateReturned: new Date(),
+          returnNote: input.returnNote ?? null,
+          returnImageKey: imageKey,
+          // The accepter is the authenticated actor, taken from the session —
+          // never from the request body.
+          returnedById: actor.id,
+        },
       });
 
       await tx.asset.update({
@@ -186,6 +261,9 @@ export async function returnAssignment(id: string): Promise<AssignmentDto> {
       metadata: {
         assetId: updated.asset.assetId,
         staffId: updated.staff.id,
+        returnedById: actor.id,
+        returnNote: updated.returnNote,
+        returnImageKey: updated.returnImageKey,
         heldForDays: Math.max(
           0,
           Math.round(
@@ -197,6 +275,13 @@ export async function returnAssignment(id: string): Promise<AssignmentDto> {
 
     return toDto(updated);
   } catch (error) {
+    if (imageKey) {
+      await getStorage()
+        .deleteObject(imageKey)
+        .catch((storageError: unknown) => {
+          console.error("[storage] failed to delete return photo after failed write", imageKey, storageError);
+        });
+    }
     throw fromPrismaError(error, "return assignment");
   }
 }

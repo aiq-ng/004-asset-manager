@@ -10,10 +10,13 @@ import { AssetCreateButton, type AssetTypeOption } from "@/features/assets/asset
  */
 export async function RegisterAssetTrigger({
   assetTypes,
+  openInitially = false,
 }: {
   assetTypes: Promise<AssetTypeOption[]>;
+  /** Open the sheet on arrival, for `/assets?new`. See `create-sheet-param`. */
+  openInitially?: boolean;
 }) {
-  return <AssetCreateButton assetTypes={await assetTypes} />;
+  return <AssetCreateButton assetTypes={await assetTypes} openInitially={openInitially} />;
 }
 
 /**
@@ -28,7 +31,7 @@ export function RegisterAssetButtonFallback() {
     <button
       type="button"
       disabled
-      className="inline-flex h-9 cursor-wait items-center gap-c54-2 rounded-c54-button bg-c54-action-primary px-c54-4 text-c54-sm font-c54-medium text-c54-text-inverted opacity-60"
+      className="inline-flex h-9 cursor-wait items-center gap-c54-2 rounded-c54-button bg-c54-action-primary px-c54-4 text-c54-sm font-c54-medium text-c54-action-primary-fg opacity-60"
     >
       Register asset
     </button>

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "@/lib/nav";
 
@@ -75,7 +75,7 @@ export function MobileNav({ items, open, onClose }: { items: NavItem[]; open: bo
             aria-label="Close navigation"
             className="rounded-c54-sm p-c54-2 text-c54-chrome-fg/70 transition-colors hover:bg-c54-bg-inverse/15 hover:text-c54-chrome-fg"
           >
-            <Icons.Close className="size-4" />
+            <X className="size-4" />
           </button>
         </div>
 
@@ -106,7 +106,7 @@ export function MobileNavTrigger({
         className,
       )}
     >
-      <Icons.Menu className="size-4" />
+      <Menu className="size-4" />
     </button>
   );
 }

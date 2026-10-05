@@ -13,9 +13,15 @@
 // - `Asset.serialNumber` is stored trimmed, and "" is normalised to NULL so
 //   several serial-less bulk items do not collide on the unique constraint.
 // - `Staff.role` drives the permission matrix in src/lib/auth/permissions.ts.
-//   There is exactly one SUPERADMIN: the first account ever created, which only
-//   `pnpm auth:create-superadmin` can do. The service layer refuses to grant
-//   SUPERADMIN to anyone else, so the role is never handed out.
+//   There is exactly one SUPERADMIN, and nothing in the app can hand the role
+//   out: it is created once, by the `/setup` screen or
+//   `pnpm auth:create-superadmin`, both of which run without a session and
+//   neither of which will run twice. A partial unique index
+//   (`Staff_one_superadmin`) enforces the "at most one" part in the database,
+//   because the checks above it are a read followed by a write and cannot be
+//   atomic with each other. Prisma has no schema syntax for a partial index, so
+//   it lives in a migration and is unmanaged: decline any diff that proposes
+//   dropping it.
 // - `Staff.passwordHash` is NULL until a password is set, which locks the
 //   account out of login (seeded staff are created without credentials).
 // - `Staff.sessionVersion` makes stateless session cookies revocable: it is
@@ -64,7 +70,9 @@ model Asset {
   assetId      String       @unique
   assetTypeId  String
   description  String
-  unit         Int          @default(1)
+  brand        String?
+  /** Model number or short name, e.g. `Latitude 5440`. NULL when it has none. */
+  model        String?
   serialNumber String?      @unique
   imageKey     String?
   status       AssetStatus  @default(AVAILABLE)
@@ -78,6 +86,7 @@ model Asset {
   @@index([assetId])
   @@index([serialNumber])
   @@index([status])
+  @@index([brand])
 }
 
 model Department {
@@ -105,10 +114,21 @@ model Staff {
   role         StaffRole  @default(USER)
   // NULL means "no password yet": the account cannot log in.
   passwordHash  String?
+  // Set when the account was invited by email and received a temporary password.
+  invitedAt     DateTime?
+  // True while the account is signed in with a temporary password handed out by
+  // an invite: every page and API route except password change/sign-out/metadata
+  // refuses to run until they set their own.
+  mustChangePassword Boolean @default(false)
   // Bumped on sign-out and password changes to revoke outstanding cookies.
   sessionVersion Int      @default(0)
 
   assignments Assignment[]
+  // Assets this staff member handed out (via the "Assigned by" column).
+  assignedAssignments Assignment[] @relation("AssignmentAssignedBy")
+  // Returns this staff member accepted (via the "Return accepted by" record).
+  returnedAssignments Assignment[] @relation("AssignmentReturnedBy")
+  resetTokens PasswordResetToken[]
   auditLogs   AuditLog[]
 
   createdAt DateTime @default(now())
@@ -125,6 +145,22 @@ model Assignment {
   dateAssigned DateTime  @default(now())
   dateReturned DateTime?
   note         String?
+  // Who handed the asset over — always set by the service from the
+  // authenticated actor, never from client input. Nullable so rows written
+  // before this field existed stay valid.
+  assignedById String?
+  assignedBy   Staff?    @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  // Return record. `returnNote` describes the condition at handover and
+  // `returnImageKey` points at the photo of the asset as it came back (same
+  // bucket layout as asset photos, `assignments/{id}/{uuid}.{ext}`).
+  // `returnedBy` is the privileged actor who accepted the return — again from
+  // the session, never from client input. All nullable: legacy rows and returns
+  // recorded before these fields existed stay valid.
+  returnNote     String?
+  returnImageKey String?
+  returnedById   String?
+  returnedBy     Staff?    @relation("AssignmentReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
@@ -134,6 +170,26 @@ model Assignment {
   @@index([assetId])
   @@index([staffId])
   @@index([staffId, dateReturned])
+  @@index([assignedById])
+  @@index([returnedById])
+}
+
+/// Single-use, short-lived tokens behind the "forgot password" flow. Only the
+/// SHA-256 digest of the token is stored, so a database leak cannot be replayed
+/// against the reset endpoint. Rows are deleted when consumed; expired ones are
+/// swept opportunistically on each new request.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  staffId   String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
 }
 
 model Counter {

@@ -10,8 +10,17 @@ import { getActor } from "@/lib/auth/actor";
 import type { Actor, Permission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/permissions";
 import { clientIpFrom, runWithRequestContext } from "@/lib/audit/context";
+// Without this the Server Action bundle keeps the no-op publisher and every
+// action taken through the UI goes unrecorded, while `recordAudit` reports
+// success. See `lib/audit/install.ts`.
+import "@/lib/audit/install";
 import { ApiError } from "@/lib/errors";
-import { formDataToObject, toFieldErrors, type ActionState } from "@/lib/server/action-state";
+import {
+  formDataToObject,
+  submittedValues,
+  toFieldErrors,
+  type ActionState,
+} from "@/lib/server/action-state";
 
 /**
  * The single seam between the UI and the service layer.
@@ -61,9 +70,16 @@ function isFieldErrorDetails(details: unknown): details is FieldErrorDetail[] {
  * "Something went wrong" on a page whose redirect had already been decided. The
  * same applies to `notFound()` and `forbidden()`. Any error Next recognises is
  * re-thrown untouched; only genuine failures are converted.
+ *
+ * Pass the `FormData` where there is one. React empties an uncontrolled form
+ * once its Server Action returns, whether or not it succeeded, so a failure that
+ * does not echo the submission costs the person everything they typed — and the
+ * service-level refusals (a duplicate serial, a file that is not an image) are
+ * exactly the ones people hit twice.
  */
-export function toFailure(error: unknown): ActionState<never> {
+export function toFailure(error: unknown, formData?: FormData): ActionState<never> {
   unstable_rethrow(error);
+  const values = formData ? submittedValues(formData) : undefined;
 
   if (error instanceof ApiError) {
     return {
@@ -73,6 +89,7 @@ export function toFailure(error: unknown): ActionState<never> {
       ...(isFieldErrorDetails(error.details)
         ? { fieldErrors: toFieldErrorsOf(error.details) }
         : {}),
+      ...(values ? { values } : {}),
     };
   }
 
@@ -81,12 +98,13 @@ export function toFailure(error: unknown): ActionState<never> {
       ok: false,
       error: "Please correct the highlighted fields.",
       fieldErrors: toFieldErrors(error),
+      ...(values ? { values } : {}),
     };
   }
 
   // Never leak an unexpected message to the browser, but do log it server-side.
   console.error("[action] unhandled error", error);
-  return { ok: false, error: "Something went wrong. Please try again." };
+  return { ok: false, error: "Something went wrong. Please try again.", ...(values ? { values } : {}) };
 }
 
 function toFieldErrorsOf(details: FieldErrorDetail[]): Record<string, string> {
@@ -185,7 +203,10 @@ export function defineAction<TInput, TOutput = undefined>(
 
       return { ok: true, data, error: "", message: options.successMessage };
     } catch (error) {
-      return { ...previousState, ...toFailure(error) };
+      // Echoing the submission back is what lets a form put the person's typing
+      // back after React empties it. Only on the way out through a failure: a
+      // successful action either redirects or replaces the page.
+      return { ...previousState, ...toFailure(error), values: submittedValues(formData) };
     }
   };
 }

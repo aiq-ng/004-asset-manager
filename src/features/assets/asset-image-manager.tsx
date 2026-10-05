@@ -1,16 +1,17 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { Image as ImageIcon, Trash, Upload } from "lucide-react";
 
 import {
   removeAssetImageAction,
   uploadAssetImageAction,
 } from "@/features/assets/actions";
 import { Button } from "@/components/ui/button";
+import { useRetainedFile } from "@/features/shared/use-retained-file";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { IMAGE_UPLOAD_MAX_BYTES } from "@/lib/config";
@@ -40,15 +41,19 @@ export function AssetImageManager({
   const [open, setOpen] = useState(false);
   const [uploadState, uploadAction] = useActionState(uploadAssetImageAction, INITIAL_ACTION_STATE);
   const [removeState, removeAction] = useActionState(removeAssetImageAction, INITIAL_ACTION_STATE);
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const justUploaded = uploadState.ok;
+  // The picked file survives a rejected upload and is released once one has been
+  // stored, so a refusal from the server leaves the picker as it was rather than
+  // demanding the file be found and chosen again.
+  const photo = useRetainedFile({
+    submission: uploadState,
+    ok: uploadState.ok,
+    clearOnSuccess: true,
+  });
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    setSelectedName(file ? file.name : null);
-  }
+  const justUploaded = uploadState.ok;
+  const selectedName = photo.name;
 
   return (
     <Card>
@@ -67,7 +72,7 @@ export function AssetImageManager({
           />
         ) : (
           <div className="flex h-28 items-center justify-center gap-c54-2 rounded-c54-card border border-dashed border-c54-border-strong bg-c54-bg-muted text-c54-xs text-c54-text-muted">
-            <Icons.Image className="size-4" />
+            <ImageIcon className="size-4" />
             No photo yet
           </div>
         )}
@@ -83,27 +88,18 @@ export function AssetImageManager({
 
         {canManage ? (
           <>
-            <form
-              ref={formRef}
-              action={uploadAction}
-              onSubmit={() => {
-                // The dialog below can close over the panel: resetting the file
-                // input after submit avoids a stale name next to a new preview.
-                setSelectedName(null);
-              }}
-              className="flex flex-col gap-c54-3"
-            >
+            <form ref={formRef} action={uploadAction} className="flex flex-col gap-c54-3">
               <input type="hidden" name="assetId" value={assetId} />
 
               <label className="flex cursor-pointer items-center justify-center gap-c54-2 rounded-c54-input border border-c54-border-default bg-c54-bg-card px-c54-3 py-c54-2 text-c54-sm text-c54-text-secondary transition-colors hover:border-c54-border-strong hover:text-c54-text-primary">
-                <Icons.Upload className="size-3.5" />
+                <Upload className="size-3.5" />
                 {selectedName ?? (imageUrl ? "Replace image" : "Choose an image")}
                 <input
+                  {...photo.inputProps}
                   type="file"
                   name="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
-                  onChange={handleFileChange}
                 />
               </label>
 
@@ -124,7 +120,7 @@ export function AssetImageManager({
             {imageUrl ? (
               <div className="border-t border-c54-border-default pt-c54-4">
                 <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-                  <Icons.Trash className="size-3.5" />
+                  <Trash className="size-3.5" />
                   Remove photo
                 </Button>
               </div>

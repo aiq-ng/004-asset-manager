@@ -26,5 +26,25 @@ export const changePasswordSchema = z.object({
     .max(200),
 });
 
+export const forgotPasswordSchema = z.object({
+  email,
+});
+
+export const resetPasswordSchema = z.object({
+  /** The raw token from the email link, carried as a hidden field. */
+  token: z.string().trim().min(20, "reset token is missing").max(128),
+  newPassword: z
+    .string()
+    .min(MIN_PASSWORD_LENGTH, `password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    .max(200),
+  confirmPassword: z.string().min(1, "confirm the new password").max(200),
+})
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

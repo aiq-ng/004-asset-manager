@@ -1,17 +1,31 @@
 #!/usr/bin/env tsx
 /**
- * Creates the one and only SUPERADMIN.
+ * Creates the one and only SUPERADMIN, from a shell.
+ *
+ * The app's `/setup` screen does the same thing in a browser and is the route a
+ * human is expected to take. This exists for the cases a browser cannot cover:
+ * a container being provisioned with no UI, CI, or an install whose only
+ * operator has shell access. It is not a second, weaker path — it calls the same
+ * service the setup screen does, so both are held to the same rules.
  *
  * There is no API route for this on purpose: SUPERADMIN can never be granted
- * through the app, so a stolen admin token cannot promote anybody. Run it once
- * against a fresh (or already populated) database:
+ * through the staff API, so a stolen admin token cannot promote anybody.
  *
  *   pnpm auth:create-superadmin
  *
- * If staff already exist it promotes the oldest account instead of creating a
- * new one, which keeps "the first user is the superadmin" true for databases
- * that were seeded or populated by hand. It refuses to run when a superadmin is
- * already present.
+ * ## It never modifies an existing account
+ *
+ * Earlier versions promoted the oldest staff row when the database already had
+ * staff, on the reasoning that "the first user is the superadmin" should stay
+ * true for seeded databases. That was wrong, and dangerous: it silently
+ * elevated a real person's account *and overwrote their password*, so running
+ * the bootstrap against a populated database was account takeover of whoever
+ * happened to be created first. It now only ever inserts. If the email you
+ * supply already belongs to somebody, it says so and stops.
+ *
+ * "Exactly one superadmin" is enforced by a partial unique index
+ * (`Staff_one_superadmin`), which is what makes two simultaneous runs — or this
+ * script racing the setup screen — impossible rather than merely unlikely.
  *
  * Non-interactive form, for CI or `docker exec`:
  *   SUPERADMIN_EMAIL=... SUPERADMIN_PASSWORD=... pnpm auth:create-superadmin
@@ -21,8 +35,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { input, password } from "@inquirer/prompts";
 import { config } from "dotenv";
 
-import { PrismaClient, StaffRole } from "../src/generated/prisma/client";
-import { MIN_PASSWORD_LENGTH, hashPassword } from "../src/lib/auth/password";
+import { PrismaClient } from "../src/generated/prisma/client";
+import { MIN_PASSWORD_LENGTH } from "../src/lib/auth/password-policy";
+import { bootstrapSuperadmin } from "../src/lib/services/staff-bootstrap";
 
 config();
 
@@ -33,6 +48,10 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
+// Built here rather than imported from `lib/prisma`, which validates the whole
+// environment — `APP_URL`, `MINIO_*`, `SESSION_SECRET` — on construction. This
+// script needs a database and nothing else, and it is most useful on exactly the
+// machines where the rest is not configured yet. `prisma/seed.ts` does the same.
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 
 /** `--flag value` or `--flag=value`, so the script can run without a TTY. */
@@ -45,26 +64,17 @@ function flag(name: string): string | undefined {
 }
 
 async function main() {
-  const existingSuperadmin = await prisma.staff.findFirst({
-    where: { role: StaffRole.SUPERADMIN },
+  const superadmin = await prisma.staff.findFirst({
+    where: { role: "SUPERADMIN" },
     select: { email: true },
   });
 
-  if (existingSuperadmin) {
-    console.error(`A superadmin already exists (${existingSuperadmin.email}). Nothing to do.`);
-    process.exit(1);
-  }
-
-  const oldest = await prisma.staff.findFirst({
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { name: true, email: true, role: true },
-  });
-
-  if (oldest) {
-    console.log(
-      `Staff already exist, so the oldest account becomes the superadmin: ` +
-        `${oldest.name} <${oldest.email}> (currently ${oldest.role}).`,
+  if (superadmin) {
+    console.error(
+      `A superadmin already exists (${superadmin.email}).\n` +
+        `To change its password, run: pnpm auth:set-superadmin-password`,
     );
+    process.exit(1);
   }
 
   const interactive = !flag("password") && !process.env.SUPERADMIN_PASSWORD;
@@ -75,10 +85,9 @@ async function main() {
     (interactive
       ? await input({
           message: "name",
-          default: oldest?.name,
           validate: (value: string) => (value.trim() ? true : "name is required"),
         })
-      : oldest?.name);
+      : undefined);
 
   const email =
     flag("email") ??
@@ -86,19 +95,37 @@ async function main() {
     (interactive
       ? await input({
           message: "email",
-          default: oldest?.email,
           validate: (value: string) =>
             /.+@.+\..+/.test(value.trim()) ? true : "enter a valid email address",
         })
       : undefined);
+
+  if (!name?.trim()) {
+    console.error("A name is required (--name or SUPERADMIN_NAME)");
+    process.exit(1);
+  }
 
   if (!email?.trim()) {
     console.error("An email address is required (--email or SUPERADMIN_EMAIL)");
     process.exit(1);
   }
 
-  if (!name?.trim()) {
-    console.error("A name is required (--name or SUPERADMIN_NAME)");
+  const normalisedEmail = email.trim().toLowerCase();
+
+  // Checked before the prompt, so somebody is not asked to choose a password for
+  // an address that cannot be used. The service refuses the same thing; this
+  // exists so the failure is a sentence rather than a constraint violation.
+  const clash = await prisma.staff.findUnique({
+    where: { email: normalisedEmail },
+    select: { email: true, role: true },
+  });
+
+  if (clash) {
+    console.error(
+      `${normalisedEmail} already belongs to a staff account (${clash.role}).\n` +
+        `This script only creates new accounts — it will not change an existing one.\n` +
+        `To set a superadmin password, run: pnpm auth:set-superadmin-password`,
+    );
     process.exit(1);
   }
 
@@ -116,31 +143,21 @@ async function main() {
     process.exit(1);
   }
 
-  const data = {
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    role: StaffRole.SUPERADMIN,
-    passwordHash: await hashPassword(secret),
-  };
+  const created = await bootstrapSuperadmin(
+    {
+      name: name.trim(),
+      email: normalisedEmail,
+      password: secret,
+    },
+    // This script's own client, so it stays runnable on a machine that has only
+    // a database — see the `client` option on `bootstrapSuperadmin`.
+    //
+    // No `record`: the audit publisher is a no-op outside a request anyway, and
+    // the recorder lives behind `server-only`, which throws under plain tsx.
+    { client: prisma },
+  );
 
-  if (oldest) {
-    await prisma.staff.update({ where: { email: oldest.email }, data });
-  } else {
-    // Creating from scratch means the register has no departments yet, so there is
-    // nothing to point the account at. The first department is created here rather
-    // than assumed: inventing an "Unassigned" bucket would let a real department
-    // be misspelled later and nobody would notice, because the bucket would
-    // always be there to fall back into.
-    const department = await prisma.department.upsert({
-      where: { name: "IT" },
-      update: {},
-      create: { name: "IT" },
-    });
-
-    await prisma.staff.create({ data: { ...data, departmentId: department.id } });
-  }
-
-  console.log(`\nDone. ${data.email} is now the superadmin and can sign in via POST /api/auth/login.`);
+  console.log(`\nDone. ${created.email} is now the superadmin and can sign in via POST /api/auth/login.`);
 }
 
 main()

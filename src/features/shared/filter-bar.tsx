@@ -2,10 +2,10 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/controls";
-import { Icons } from "@/components/ui/icons";
+import { EntitySelect } from "@/components/ui/entity-select";
 import { buildQuery } from "@/lib/utils/search-params";
 
 export interface FilterOption {
@@ -86,9 +86,14 @@ export function FilterBar({
   const activeCount = Array.from(searchParams.keys()).filter((key) => key !== "page").length;
 
   return (
+    // The row packs to the left on purpose: the selects sit right beside the
+    // search box rather than scattered across it, because a filter that reads as
+    // attached to the search is read as applying to the same list. `flex-1` on
+    // the form used to stretch it across the row and shove every select to the
+    // far edge, which is exactly the gap this layout exists to avoid.
     <div className="flex flex-col gap-c54-3 xl:flex-row xl:items-end">
       <form
-        className="relative min-w-0 flex-1"
+        className="relative w-full xl:w-[15.5rem]"
         onSubmit={(event) => {
           event.preventDefault();
           setParam(term, text.trim());
@@ -98,7 +103,7 @@ export function FilterBar({
           {placeholder}
         </label>
         <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center text-c54-text-muted">
-          <Icons.Search />
+          <Search />
         </span>
         {/* Left padding is a plain `pl-9` on purpose: the token package ships
             no `--c54-space-9`, so a `pl-c54-9` here would silently not compile
@@ -114,36 +119,43 @@ export function FilterBar({
             debounce.current = setTimeout(() => setParam(term, value.trim()), 400);
           }}
           placeholder={placeholder}
-          className="h-9 w-full rounded-c54-input border border-c54-border-default bg-c54-bg-card pr-c54-3 pl-9 text-c54-sm text-c54-text-primary placeholder:text-c54-text-muted transition-[border-color,box-shadow] duration-c54-fast hover:border-c54-border-strong focus:border-c54-action-primary focus:ring-2 focus:ring-c54-action-primary/25 focus:outline-none"
+          className="h-9 w-full max-w-[15.5rem] rounded-c54-input border border-c54-border-default bg-c54-bg-card pr-c54-3 pl-9 text-c54-sm text-c54-text-primary placeholder:text-c54-text-muted transition-[border-color,box-shadow] duration-c54-fast hover:border-c54-border-strong focus:border-c54-action-primary focus:ring-2 focus:ring-c54-action-primary/25 focus:outline-none"
         />
       </form>
 
+      {/* `xl:w-52` rather than `w-44`: once a filter upgrades to a searchable
+          box its prompt reads "Search department…", which an 11rem column clips
+          mid-word. */}
       {selects.map((select) => (
-        <div key={select.name} className="w-full xl:w-44">
+        <div key={select.name} className="w-full xl:w-52">
           <label
             htmlFor={`filter-${select.name}`}
             className="mb-c54-1 block text-c54-2xs font-c54-semibold tracking-c54-widest text-c54-text-muted uppercase"
           >
             {select.label}
           </label>
-          <Select
+          <EntitySelect
             id={`filter-${select.name}`}
             value={select.value}
-            onChange={(event) => setParam(select.name, event.target.value)}
-          >
-            {select.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
+            // The filter list grows the same way every other list does — a
+            // department list past a dozen stops being scannable — so it upgrades
+            // itself. `searchable` stays unset on purpose: role has four values
+            // and always will, so the threshold leaves it as a native select
+            // without anybody having to say so.
+            options={select.options}
+            // Named after the filter rather than a bare "Search…": once the
+            // control becomes a text box, the only thing telling the operator
+            // what they are searching is the prompt inside it.
+            searchPlaceholder={`Search ${select.label.toLowerCase()}…`}
+            onChange={(next) => setParam(select.name, next)}
+          />
         </div>
       ))}
 
       {activeCount > 0 ? (
         <Button variant="ghost" onClick={() => router.push(pathname, { scroll: false })}>
           Clear
-          <Icons.Close className="size-3.5" />
+          <X className="size-3.5" />
         </Button>
       ) : null}
     </div>

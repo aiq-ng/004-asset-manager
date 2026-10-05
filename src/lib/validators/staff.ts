@@ -11,7 +11,8 @@ export const STAFF_ROLES = ["USER", "ASSIGNER", "ADMIN", "SUPERADMIN"] as const;
 
 /**
  * Roles a superadmin may hand out. SUPERADMIN is absent on purpose: it is only
- * ever granted by `pnpm auth:create-superadmin`.
+ * ever granted by the setup screen or `pnpm auth:create-superadmin`, never
+ * through staff management.
  */
 export const assignableRoleSchema = z.enum(["USER", "ASSIGNER", "ADMIN"]);
 
@@ -99,7 +100,45 @@ export const staffIdParamSchema = z.object({
   id: z.string().trim().min(1, "Staff id is required").max(64),
 });
 
+/**
+ * The one-time setup form.
+ *
+ * The confirmation is the field worth justifying: this is the only moment
+ * anybody ever sets a password they are certain of, with nobody checking it for
+ * them, and the person who then has to be able to sign in is whoever just
+ * created the install. A typo that is accepted here leaves an app that nobody
+ * can get into, with no second superadmin to fix it — the unique index that
+ * makes a *second* one impossible is the same thing that makes recovery from a
+ * bad first password impossible.
+ *
+ * `password` and `confirmPassword` are compared after trimming neither: a
+ * leading space is a legitimate part of a passphrase, and silently stripping it
+ * from one field but not the other would reject matches the operator can see
+ * are identical.
+ */
+export const bootstrapSuperadminSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "name is required")
+      .max(120, "name must be <= 120 characters"),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("enter a valid email address")
+      .max(200, "email must be <= 200 characters"),
+    password: passwordSchema,
+    confirmPassword: z.string().min(1, "confirm your password").max(200),
+  })
+  .refine((value) => value.confirmPassword === value.password, {
+    path: ["confirmPassword"],
+    message: "the two passwords do not match",
+  });
+
 export type ListStaffQuery = z.infer<typeof listStaffQuerySchema>;
 export type AssignableRole = z.infer<typeof assignableRoleSchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
+export type BootstrapSuperadminInput = z.infer<typeof bootstrapSuperadminSchema>;

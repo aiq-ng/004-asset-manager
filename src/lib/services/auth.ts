@@ -1,7 +1,11 @@
+import { createHash, randomBytes } from "node:crypto";
+
 import { prisma } from "@/lib/prisma";
 import { AUDIT_ACTIONS } from "@/lib/audit/events";
 import { recordAudit } from "@/lib/audit/context";
 import { ApiError } from "@/lib/errors";
+import { PASSWORD_RESET_TTL_MINUTES } from "@/lib/config";
+import { sendPasswordResetEmail } from "@/lib/email/resend";
 import { hashPassword, needsRehash, verifyPassword } from "@/lib/auth/password";
 import { createSession, destroySession } from "@/lib/auth/session";
 
@@ -35,6 +39,7 @@ export async function login(email: string, password: string): Promise<LoginResul
       role: true,
       passwordHash: true,
       sessionVersion: true,
+      mustChangePassword: true,
     },
   });
 
@@ -91,6 +96,7 @@ export async function login(email: string, password: string): Promise<LoginResul
       email: staff.email,
       department: staff.department.name,
       role: staff.role,
+      mustChangePassword: staff.mustChangePassword,
     },
   });
 
@@ -147,10 +153,11 @@ export async function changePassword(
   const passwordHash = await hashPassword(newPassword);
 
   // A password change revokes other sessions, then re-issues this one so the
-  // person who just changed it stays signed in.
+  // person who just changed it stays signed in. It also ends any "temporary
+  // password" state: the caller just proved they know the current one.
   await prisma.staff.update({
     where: { id: staffId },
-    data: { passwordHash, sessionVersion: { increment: 1 } },
+    data: { passwordHash, mustChangePassword: false, sessionVersion: { increment: 1 } },
   });
 
   await createSession(staffId, staff.sessionVersion + 1);
@@ -171,4 +178,111 @@ export async function hasPassword(staffId: string): Promise<boolean> {
   });
 
   return Boolean(staff?.passwordHash);
+}
+
+/**
+ * The "forgot password" flow.
+ *
+ * Only the SHA-256 digest of the token is stored, so the rows in the database
+ * cannot be replayed against the reset endpoint; the raw token exists only in
+ * the email. A new request deletes the account's previous tokens, so exactly
+ * one live link per account at a time and expired rows never pile up.
+ */
+const RESET_TOKEN_BYTES = 32;
+
+function hashResetToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/**
+ * Emails a single-use reset link if — and only if — the account exists. The
+ * caller answers with the same success message either way, so the endpoint
+ * cannot be used to find out who has an account.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const staff = await prisma.staff.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true },
+  });
+
+  if (!staff) return;
+
+  // Supersedes any earlier link and sweeps expired/consumed rows for this
+  // account in one go.
+  await prisma.passwordResetToken.deleteMany({ where: { staffId: staff.id } });
+
+  const rawToken = randomBytes(RESET_TOKEN_BYTES).toString("base64url");
+  await prisma.passwordResetToken.create({
+    data: {
+      staffId: staff.id,
+      tokenHash: hashResetToken(rawToken),
+      expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60_000),
+    },
+  });
+
+  const result = await sendPasswordResetEmail({
+    to: staff.email,
+    name: staff.name,
+    rawToken,
+  });
+
+  await recordAudit({
+    action: AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED,
+    entityType: "SESSION",
+    entityId: staff.id,
+    summary: result.delivered
+      ? `Password reset link emailed to ${staff.email}`
+      : result.skipped
+        ? `Password reset email to ${staff.email} skipped (no mail key configured)`
+        : `Password reset email to ${staff.email} failed: ${result.error}`,
+    metadata: {
+      email: staff.email,
+      delivered: result.delivered,
+      skipped: result.skipped,
+      expiresAfterMinutes: PASSWORD_RESET_TTL_MINUTES,
+    },
+    actor: null,
+  });
+}
+
+/**
+ * Consumes a reset token and sets the new password.
+ *
+ * Invalid, used and expired tokens all return the same message — which one the
+ * caller holds is nobody's business but the mailbox owner's. The password set
+ * bumps `sessionVersion`, so any session the account still holds is revoked.
+ */
+export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash: hashResetToken(rawToken) },
+    include: { staff: { select: { id: true, email: true } } },
+  });
+
+  const invalid = ApiError.badRequest(
+    "This reset link is invalid or has expired. Request a new one.",
+  );
+  if (!record || record.usedAt !== null || record.expiresAt <= new Date()) throw invalid;
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.$transaction([
+    prisma.staff.update({
+      where: { id: record.staffId },
+      // The token proved mailbox ownership, so the forced-change flag lifts too.
+      data: { passwordHash, mustChangePassword: false, sessionVersion: { increment: 1 } },
+    }),
+    prisma.passwordResetToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    }),
+  ]);
+
+  await recordAudit({
+    action: AUDIT_ACTIONS.PASSWORD_CHANGED,
+    entityType: "SESSION",
+    entityId: record.staffId,
+    summary: `${record.staff.email} set a new password from a reset link (sessions revoked)`,
+    metadata: { viaResetLink: true, sessionsRevoked: true },
+    actor: null,
+  });
 }

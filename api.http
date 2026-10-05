@@ -1,7 +1,8 @@
 ### Assets Inventory API - example flows
 ### Works with the REST Client extension (VS Code / JetBrains) or the IntelliJ HTTP client.
 ### Start the stack first: docker compose up -d && pnpm db:migrate && pnpm dev
-### Also start the audit worker in a second terminal: pnpm worker:audit
+### (docker compose already runs the audit worker; for a bare `pnpm dev` start it
+###  with `pnpm worker:audit` in a second terminal, or nothing is recorded)
 
 @base = http://localhost:3000
 @image = ./example-image.png

@@ -6,8 +6,8 @@ import { can, requirePermission } from "@/lib/auth/permissions";
 import { getAsset, retireAsset, updateAsset } from "@/lib/services/assets";
 import {
   assetIdParamSchema,
+  assignerAssetStatusSchema,
   updateAssetSchema,
-  updateAssetStatusSchema,
 } from "@/lib/validators/asset";
 
 export const GET = apiRoute(
@@ -19,8 +19,9 @@ export const GET = apiRoute(
 
 /**
  * ADMIN and SUPERADMIN may edit anything on the asset. ASSIGNER may only change
- * `status` (flag it broken, put it back in the pool) - anything else in the body
- * is rejected by the strict status-only schema.
+ * `status`, and only between the two states that mean "in circulation" —
+ * anything else in the body, and `RETIRED` in particular, is rejected by the
+ * narrower schema.
  */
 export const PATCH = apiRoute(
   async (request: NextRequest, ctx: RouteContext<"/api/assets/[id]">) => {
@@ -29,7 +30,7 @@ export const PATCH = apiRoute(
     requirePermission(actor, "asset:updateStatus");
 
     const input = parseOrThrow(
-      can(actor.role, "asset:manage") ? updateAssetSchema : updateAssetStatusSchema,
+      can(actor.role, "asset:manage") ? updateAssetSchema : assignerAssetStatusSchema,
       await parseJsonBody(request),
     );
 

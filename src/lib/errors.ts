@@ -124,6 +124,18 @@ export function fromPrismaError(error: unknown, context?: string): ApiError {
     case "P2002": {
       const field = uniqueViolationLabel(known);
       const model = known.meta?.modelName;
+
+      // A duplicated serial is the one unique violation a person hits by accident
+      // and has to recover from, so it gets a message they can act on and is
+      // attached to the field it belongs to rather than floating as a global
+      // banner. `Asset.serialNumber must be unique` reads like a stack trace to
+      // whoever is halfway through entering a column of them off a sheet.
+      if (field === "serialNumber") {
+        return ApiError.conflict("That serial number is already on the register.", [
+          { path: "serialNumber", message: "This serial number is already registered." },
+        ]);
+      }
+
       return ApiError.conflict(
         field === "active assignment"
           ? "Asset already has an active assignment"

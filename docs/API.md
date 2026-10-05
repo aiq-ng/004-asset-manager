@@ -136,6 +136,30 @@ caller's cookie so the current device stays signed in.
 { "data": { "id": "cmupql9yk0004k8zr5tncye2w", "passwordUpdated": true } }
 ```
 
+### `POST /api/auth/forgot-password`
+
+Public. Body `{ email }`.
+
+Emails a single-use reset link when the account exists. The response is
+byte-identical whether or not the address is registered, so the endpoint cannot
+be used to enumerate accounts — only the audit trail records the difference.
+Requesting a link supersedes any earlier one for that account.
+
+```json
+{ "data": { "message": "If an account exists for that email, a reset link is on its way." } }
+```
+
+### `POST /api/auth/reset-password`
+
+Public. Body `{ token, newPassword, confirmPassword }` (12+ characters).
+
+Consumes the token from the emailed link. Invalid, already-used and expired
+tokens all fail with the same message, so the error cannot distinguish which
+case happened. Also bumps `sessionVersion`, so any session the account still
+holds is revoked, and clears the forced-change flag an invited session carries.
+
+Errors: `400` invalid or expired token, `400` validation.
+
 ---
 
 ## Asset types
@@ -231,10 +255,12 @@ Errors: `400`, `404`, `409` (duplicate value, or `code` change with assets in us
 | ------------ | ------- | ---------------------------------------------------------------- |
 | `page`       | int ≥ 1 | default `1`                                                      |
 | `pageSize`   | int ≤100| default `20`                                                     |
-| `q`          | string  | case-insensitive match on `assetId`, `serialNumber`, `description` |
+| `q`          | string  | case-insensitive match on `assetId`, `serialNumber`, `description`, `brand`, `model` |
 | `type`       | string  | asset type `code` (case-insensitive) or `id`                     |
 | `status`     | enum    | `AVAILABLE` \| `ASSIGNED` \| `UNDER_REPAIR` \| `RETIRED`         |
 | `assignedTo` | string  | staff id — only assets currently assigned to that person         |
+| `brand`      | string  | exact match, e.g. `Dell`                                        |
+| `model`      | string  | exact match, e.g. `Latitude 5440`                               |
 
 ```bash
 curl -b cookies.txt 'http://localhost:3000/api/assets?page=1&pageSize=20&q=thinkpad&type=LAP&status=AVAILABLE'
@@ -246,8 +272,9 @@ curl -b cookies.txt 'http://localhost:3000/api/assets?page=1&pageSize=20&q=think
     {
       "id": "cmupql9zt000ek8zrqe8iglid",
       "assetId": "IT-LAP-0003",
-      "description": "ThinkPad T14 (spare pool)",
-      "unit": 1,
+      "description": "Spare pool laptop",
+      "brand": "Lenovo",
+      "model": "ThinkPad T14",
       "serialNumber": null,
       "status": "AVAILABLE",
       "imageKey": null,
@@ -272,9 +299,10 @@ curl -b cookies.txt 'http://localhost:3000/api/assets?page=1&pageSize=20&q=think
 | Field         | Type   | Required | Notes                                                            |
 | ------------- | ------ | -------- | ---------------------------------------------------------------- |
 | `assetType`   | string | yes      | asset type `code` or `id`                                          |
-| `description` | string | yes      | ≤ 500 chars                                                      |
-| `unit`        | int ≥1  | no       | default `1`; bulk count (e.g. `24` chairs)                        |
-| `serialNumber`| string | no       | trimmed; `""`/whitespace becomes `null`; unique when present     |
+| `description` | string | yes      | ≤ 500 chars; stored exactly as sent                             |
+| `brand`       | string | yes      | ≤ 100 chars; trimmed                                     |
+| `model`       | string | no       | ≤ 100 chars; trimmed, `""`/whitespace becomes `null`            |
+| `serialNumber`| string | yes      | ≤ 120 chars; trimmed; unique across the register                |
 | `status`      | enum   | no       | `AVAILABLE` (default), `UNDER_REPAIR`, `RETIRED`                  |
 
 `assetId` is generated server-side as `IT-{TYPE_CODE}-{4 digits}` from a per-type counter that is incremented inside the creating transaction, so concurrent requests can never collide and numbers are never reused.
@@ -282,7 +310,7 @@ curl -b cookies.txt 'http://localhost:3000/api/assets?page=1&pageSize=20&q=think
 ```bash
 curl -b cookies.txt -X POST http://localhost:3000/api/assets \
   -H 'content-type: application/json' \
-  -d '{"assetType":"DCK","description":"WD19TB Thunderbolt dock","unit":1,"serialNumber":"SN-DCK-0001"}'
+  -d '{"assetType":"DCK","description":"WD19TB Thunderbolt dock","brand":"CalDigit","serialNumber":"SN-DCK-0001"}'
 ```
 
 ```json
@@ -291,7 +319,7 @@ curl -b cookies.txt -X POST http://localhost:3000/api/assets \
     "id": "cmupqs61k0003dozreom3pwab",
     "assetId": "IT-DCK-0001",
     "description": "WD19TB Thunderbolt dock",
-    "unit": 1,
+    "brand": "CalDigit",
     "serialNumber": "SN-DCK-0001",
     "status": "AVAILABLE",
     "imageKey": null,
@@ -306,6 +334,64 @@ curl -b cookies.txt -X POST http://localhost:3000/api/assets \
 ```
 
 Errors: `400` validation, `409` duplicate `serialNumber`, `422` unknown asset type.
+
+### `POST /api/assets/bulk`
+
+*Requires: `ADMIN`.*
+
+Registers many items of one kind in a single call — the same batch the "Register
+in bulk" sheet submits. Serials within the batch are deduplicated and checked
+against the register; the ones that cannot be created come back in `skipped`
+with a reason rather than failing the whole batch. Responds `201` when every row
+was created and `200` when anything was skipped, so the caller can tell the two
+apart from the status code alone.
+
+| Field        | Type     | Required | Notes                                        |
+| ------------ | -------- | -------- | -------------------------------------------- |
+| `assetType`  | string   | yes      | asset type `code` or `id`                    |
+| `description`| string   | yes      | ≤ 500 chars; shared by every row             |
+| `brand`      | string   | yes      | ≤ 100 chars; shared by every row             |
+| `model`      | string   | no       | ≤ 100 chars; shared by every row             |
+| `serials`    | string[] | yes      | in order, so asset ids run down the column   |
+| `status`     | enum     | no       | `AVAILABLE` (default), `UNDER_REPAIR`, `RETIRED` |
+
+```json
+{
+  "data": {
+    "created": [{ "assetId": "IT-MON-0041", "serial": "SN-MON-0041" }],
+    "skipped": [{ "serial": "SN-MON-0007", "reason": "Already on the register" }]
+  }
+}
+```
+
+The photo is **not** accepted here: an uploaded image is a `multipart/form-data`
+part, and this route parses JSON. The bulk sheet posts its one batch photo
+through the Server Action instead.
+
+### Populating `serials` from a spreadsheet
+
+The register's bulk sheet can read the serials out of a file instead of asking
+for them one at a time: pick a CSV or Excel file, and the first column — one
+serial per row — becomes the batch's `serials`, with the count derived from it.
+Everything after that is this endpoint, unchanged: the same within-batch
+dedupe, the same `skipped` reasons, the same per-type id allocation.
+
+This is a **UI-only** convenience and adds no API surface. Nothing is uploaded:
+the file is parsed in the browser and the result travels as the ordinary
+`serials` array, so this endpoint knows nothing about spreadsheets.
+
+| Behaviour                | Rule                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Formats                  | `.csv`, `.tsv`, `.xlsx`, `.xls`; up to 5 MB                            |
+| Column read              | The first column of the first sheet, one serial per row                |
+| Heading row              | A first cell reading `serial`, `serial number`, `s/n`, `sn`, … is skipped |
+| Within-file duplicates   | Folded case-insensitively and reported as skipped rows                 |
+| Row cap                  | `BULK_ASSET_ENTRY_MAX` (500); the overflow is reported, not silently cut |
+| Bad file                 | An inline message naming the problem; nothing is filled in             |
+
+The cap and the dedupe are enforced here as well as on submit. The import is a
+way of typing faster, not a second way in: a serial already on the register
+still comes back in `skipped` with `Already on the register`.
 
 ### `GET /api/assets/[id]`
 
@@ -323,7 +409,6 @@ curl -b cookies.txt http://localhost:3000/api/assets/IT-LAP-0001
     "id": "cmupql9z90008k8zr2y33x1yj",
     "assetId": "IT-LAP-0001",
     "description": "MacBook Pro 14\" M3",
-    "unit": 1,
     "serialNumber": "SN-LAP-0001",
     "status": "ASSIGNED",
     "imageKey": null,
@@ -370,7 +455,13 @@ Errors: `404`.
 
 *Requires: `ASSIGNER` (status field only) or `ADMIN` (all fields).*
 
-Accepts `description`, `unit`, `serialNumber`, `status`. `assetId` is immutable. `status: "ASSIGNED"` is rejected — status only flips through the assignments endpoints (the enum itself rejects it with `400`, and `422` if the asset is currently checked out).
+Accepts `description`, `brand`, `model`, `serialNumber`, `status`. `assetId` is immutable. `status: "ASSIGNED"` is rejected — status only flips through the assignments endpoints (the enum itself rejects it with `400`, and `422` if the asset is currently checked out).
+
+An `ASSIGNER` is held to a strict, narrower body: `status` only, and only
+between `AVAILABLE` and `UNDER_REPAIR`. `RETIRED` is an `asset:manage` operation
+and is refused with `400` on that path — retiring is `DELETE /api/assets/[id]`,
+which is `ADMIN`-only. Any other field is refused too, because the assigner
+schema is `.strict()`.
 
 ```bash
 curl -b cookies.txt -X PATCH http://localhost:3000/api/assets/IT-LAP-0002 \
@@ -384,7 +475,6 @@ curl -b cookies.txt -X PATCH http://localhost:3000/api/assets/IT-LAP-0002 \
     "id": "cmupql9zx000gk8zrbvubkjfz",
     "assetId": "IT-LAP-0002",
     "description": "Dell Latitude 5440 (replaced battery)",
-    "unit": 1,
     "serialNumber": "SN-LAP-0002",
     "status": "UNDER_REPAIR",
     "imageKey": null,
@@ -398,7 +488,7 @@ curl -b cookies.txt -X PATCH http://localhost:3000/api/assets/IT-LAP-0002 \
 }
 ```
 
-Errors: `400`, `404`, `409` duplicate `serialNumber`, `422` status change while assigned.
+Errors: `400`, `404`, `409` duplicate `serialNumber`, `422` status change while assigned. An `ASSIGNER` sending `RETIRED` or any field other than `status` gets `400`.
 
 ### `DELETE /api/assets/[id]`
 
@@ -416,7 +506,6 @@ curl -b cookies.txt -X DELETE http://localhost:3000/api/assets/IT-LAP-0003
     "id": "cmupql9zz000ik8zrbw4ghz0c",
     "assetId": "IT-LAP-0003",
     "description": "ThinkPad T14 (spare pool)",
-    "unit": 1,
     "serialNumber": null,
     "status": "RETIRED",
     "imageKey": null,
@@ -455,7 +544,6 @@ curl -b cookies.txt -X POST http://localhost:3000/api/assets/IT-DCK-0001/image \
     "id": "cmupqs61k0003dozreom3pwab",
     "assetId": "IT-DCK-0001",
     "description": "WD19TB Thunderbolt dock",
-    "unit": 1,
     "serialNumber": "SN-DCK-0001",
     "status": "AVAILABLE",
     "imageKey": "assets/IT-DCK-0001/636254f4-ac8e-4b4e-8f8b-a5356b9570c9.png",
@@ -497,6 +585,15 @@ Errors: `404`, `422` when the asset has no image.
 | `download`   | `1`         | off     | adds `Content-Disposition: attachment; filename="{assetId}.png"` |
 
 The QR encodes `{APP_URL}/assets/{assetId}` and is generated on demand — nothing is written to object storage.
+
+That page is the one route readable without a session: the QR is printed on a
+physical tag, so the person holding the device has no cookie to send. An
+anonymous visitor with a valid asset number gets a read-only card — description,
+status, type, brand, model, serial, registered date and the current holder's name
+and department. No history, no return notes or photos, no database id, no
+controls, and no app chrome. An unknown number is a `404`. A signed-in visitor
+gets the full authenticated detail page instead, and an invited session that still
+owes a password change is sent to `/change-password` before either.
 
 ```bash
 curl -b cookies.txt http://localhost:3000/api/assets/IT-LAP-0001/qr --output qr.png
@@ -604,8 +701,7 @@ curl -b cookies.txt http://localhost:3000/api/staff/cmupql9yk0004k8zr5tncye2w
         "id": "cmupql9z90008k8zr2y33x1yj",
         "assetId": "IT-LAP-0001",
         "description": "MacBook Pro 14\" M3",
-        "status": "ASSIGNED",
-        "unit": 1
+        "status": "ASSIGNED"
       }
     ],
     "history": [
@@ -621,7 +717,6 @@ curl -b cookies.txt http://localhost:3000/api/staff/cmupql9yk0004k8zr5tncye2w
           "assetId": "IT-LAP-0001",
           "description": "MacBook Pro 14\" M3",
           "status": "ASSIGNED",
-          "unit": 1,
           "assetType": { "id": "cmupql9we0000k8zrtl7zsbar", "name": "Laptop", "code": "LAP" }
         }
       }
@@ -666,6 +761,32 @@ curl -b cookies.txt -X DELETE http://localhost:3000/api/staff/<id>
 { "data": { "id": "cmupqwvrp0004djzrs4d6mllo", "deleted": true } }
 ```
 
+### `POST /api/staff/[id]/resend-invite`
+
+*Requires: `SUPERADMIN`.*
+
+Re-issues the invite for an account. A fresh temporary password is generated,
+emailed to the member, and **any previous password stops working**: the hash is
+replaced and `sessionVersion` is bumped, so a session already signed in is
+revoked and the forced-change flag is re-armed. The temporary password is never
+in the response — it exists only in the email.
+
+Note this does not require the account to have been password-less: it overwrites
+whatever password was there, which is the point of a resend.
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/api/staff/<id>/resend-invite
+```
+
+```json
+{ "data": { "delivered": true, "skipped": false } }
+```
+
+`skipped` is `true` when no mail provider is configured, in which case the
+temporary password has been set but not sent.
+
+Errors: `404` unknown staff, `403` the target is the superadmin.
+
 ---
 
 ## Audit trail
@@ -673,10 +794,15 @@ curl -b cookies.txt -X DELETE http://localhost:3000/api/staff/<id>
 *Requires: `SUPERADMIN`.*
 
 Every meaningful action is queued to BullMQ and written to an append-only
-`AuditLog` table by a separate worker (`pnpm worker:audit`), so the response is
-never held up by audit storage. Each row carries a snapshot of who acted (id,
-name, email, role at the time), where they acted from (client IP, user agent,
-route), a human-readable summary, and a field-level `changes` diff for updates.
+`AuditLog` table by a separate worker (the `worker` service in
+`docker-compose.yml`, or `pnpm worker:audit`), so the response is never held up by
+audit storage. Each row carries a snapshot of who acted (id, name, email, role at
+the time), where they acted from (client IP, user agent, route), a human-readable
+summary, and a field-level `changes` diff for updates.
+
+Actions taken through the UI are recorded exactly like API calls. They carry
+`route` as `action:<name>` (e.g. `action:login`, `action:createAsset`) because a
+Server Action has no HTTP path of its own.
 
 ```bash
 curl -b cookies.txt 'http://localhost:3000/api/audit-logs?pageSize=5'
@@ -691,10 +817,9 @@ curl -b cookies.txt 'http://localhost:3000/api/audit-logs?pageSize=5'
       "action": "ASSET_UPDATED",
       "entityType": "ASSET",
       "entityId": "cmupwhq7a0002mizrp6smp9aa",
-      "summary": "Updated asset IT-DCK-0001 (description, unit)",
+      "summary": "Updated asset IT-DCK-0001 (description)",
       "changes": {
-        "description": { "from": "WD19TB Thunderbolt dock", "to": "WD19TB dock (rev 2)" },
-        "unit": { "from": 1, "to": 2 }
+        "description": { "from": "WD19TB Thunderbolt dock", "to": "WD19TB dock (rev 2)" }
       },
       "metadata": { "assetId": "IT-DCK-0001" },
       "actor": {
@@ -716,7 +841,15 @@ curl -b cookies.txt 'http://localhost:3000/api/audit-logs?pageSize=5'
     "pageSize": 5,
     "total": 42,
     "totalPages": 9,
-    "actions": { "ASSET_UPDATED": 12, "ASSIGNMENT_CREATED": 9, "LOGIN_SUCCEEDED": 8 }
+    "actions": { "ASSET_UPDATED": 12, "ASSIGNMENT_CREATED": 9, "LOGIN_SUCCEEDED": 8 },
+    "worker": {
+      "workerRunning": true,
+      "lastSeenAt": "2026-10-01T18:52:10.902Z",
+      "waiting": 0,
+      "active": 0,
+      "failed": 0,
+      "delayed": 0
+    }
   }
 }
 ```
@@ -743,6 +876,28 @@ curl -b cookies.txt 'http://localhost:3000/api/audit-logs?pageSize=5'
 `meta.actions` always carries per-action totals for the whole table, so a UI can
 build a filter bar from one request.
 
+### Worker health (`meta.worker`)
+
+The trail is written by a separate process, so an empty `data` array has two very
+different causes: nothing has happened, or events are queued and nothing is
+draining them. `meta.worker` distinguishes them.
+
+| Field           | Notes                                                                  |
+| --------------- | ---------------------------------------------------------------------- |
+| `workerRunning` | A heartbeat stamp exists and is younger than 45s                       |
+| `lastSeenAt`    | When the worker last beat; `null` if it has never run                   |
+| `waiting`       | Events queued but not yet written — **non-zero with no worker means the trail is behind** |
+| `active`        | Events being written right now                                         |
+| `delayed`       | Events waiting on a retry backoff                                      |
+| `failed`        | Events that exhausted all 5 attempts. These are **written off** and need an operator; restarting the worker does not recover them |
+
+The worker stamps a heartbeat key every 10s, and clears it on a planned shutdown so
+a deploy is not reported as a failure. If Redis is unreachable the whole object
+falls back to zeros with `workerRunning: false` rather than the request failing.
+
+> Note: if `workerRunning` is `false` and `waiting` is `0`, nothing is missing yet —
+> but the next action taken will queue with nobody to write it.
+
 ### Recorded actions
 
 | Group       | Actions                                                                                     |
@@ -753,6 +908,7 @@ build a filter bar from one request.
 | Staff       | `STAFF_CREATED`, `STAFF_UPDATED`, `STAFF_ROLE_CHANGED`, `STAFF_PASSWORD_RESET`, `STAFF_DELETED` |
 | Assignments | `ASSIGNMENT_CREATED`, `ASSIGNMENT_RETURNED`                                                  |
 | Security    | `AUTHORIZATION_DENIED` (a `403`, naming the account and the permission it wanted)            |
+| Departments  | `DEPARTMENT_CREATED`, `DEPARTMENT_RENAMED`, `DEPARTMENT_DELETED`                              |
 
 Guarantees and limits:
 
@@ -761,6 +917,7 @@ Guarantees and limits:
 - **Retried.** 5 attempts with exponential backoff (2s → 32s) if the worker or database is briefly unavailable.
 - **No secrets.** Passwords, tokens and secrets are replaced with `[redacted]` before an event is queued.
 - **Fail-open.** If Redis is down the API keeps working and the enqueue is bounded at 1s, after which a circuit breaker pauses auditing for 30s. Events during that window are lost — availability of the API wins over completeness of the trail.
+- **Observable.** A worker that is down does not break anything, which is what makes it easy to miss. `/audit` shows a banner with the number of queued events, and `meta.worker` above is the machine-readable form of the same signal.
 
 ---
 
@@ -827,10 +984,16 @@ Errors: `400`, `404`, `409` (already assigned), `422` (asset not `AVAILABLE`).
 
 *Requires: `ASSIGNER`+.*
 
-Stamps `dateReturned` and puts the asset back to `AVAILABLE`. Rows are never deleted. Returning an already-returned assignment is `422`.
+Stamps `dateReturned`, records `returnedBy` ("return accepted by" — always the authenticated actor, never client input) and puts the asset back to `AVAILABLE`. Rows are never deleted. Returning an already-returned assignment is `422`.
+
+The body is optional. When present it may carry `returnNote` (condition description at handover, up to 500 characters). The return *photo* is a UI-only concern — the app's sheet uploads it as a `File`; this JSON endpoint does not accept one.
 
 ```bash
 curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006djzrl7h1mohx/return
+
+curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006djzrl7h1mohx/return \
+  -H 'Content-Type: application/json' \
+  -d '{"returnNote": "Scratched lid; charger included"}'
 ```
 
 ```json
@@ -855,12 +1018,19 @@ curl -b cookies.txt -X POST http://localhost:3000/api/assignments/cmupqww2a0006d
       "email": "diogo.alves@example.com",
       "phone": null,
       "role": "USER"
+    },
+    "returnNote": "Scratched lid; charger included",
+    "returnImageKey": null,
+    "returnedBy": {
+      "id": "cmupqz1rb0008djzr9hh7n4x2k",
+      "name": "Ada Okafor",
+      "department": "IT"
     }
   }
 }
 ```
 
-Errors: `404`, `422` (already returned).
+Errors: `404`, `422` (already returned), `400` (invalid JSON body or `returnNote` over 500 characters).
 
 ### `GET /api/assignments`
 
@@ -907,5 +1077,34 @@ curl -b cookies.txt 'http://localhost:3000/api/assignments?active=true&staffId=c
 | `MINIO_ACCESS_KEY` / `_SECRET_KEY` | S3 credentials                                             |
 | `MINIO_BUCKET`                  | Private bucket, created lazily (default `asset-images`)        |
 | `MINIO_PRESIGN_EXPIRY_SECONDS`  | Presigned URL lifetime (default `3600`)                        |
+| `SESSION_SECRET`                | HS256 session-cookie signing key, ≥ 32 chars                  |
+| `REDIS_URL`                     | Audit queue (default `redis://localhost:6379`)                |
+| `AUDIT_REDIS_PREFIX`            | Optional key namespace, so several environments can share one Redis |
+
+### A note on the `xlsx` dependency
+
+Spreadsheet import reads `.xlsx` through SheetJS, and it is deliberately **not**
+the version npm serves:
+
+```json
+"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+```
+
+The copy on the npm registry is stuck at `0.18.5` and carries known
+high-severity prototype-pollution advisories with no fix published there —
+SheetJS states the registry is out of date and that their CDN is authoritative
+for the fixed releases (resolved in `0.19.3`). Installing the tarball through
+the package manager rather than a runtime `<script>` keeps the library inside
+the bundle and integrity-pinned in `pnpm-lock.yaml`, with no CDN dependency at
+run time.
+
+To upgrade, install a newer tarball from `cdn.sheetjs.com`. SheetJS also
+recommends *vendoring* the tarball into the repo (they publish
+`vendor/` instructions) to decouple installs from their infrastructure; that is
+not done here yet, so `pnpm install` needs `cdn.sheetjs.com` reachable.
+
+The library is only ever reached through a dynamic import behind
+`features/assets/serial-import-xlsx.ts`, and CSV is parsed by hand without it,
+so a CSV-only import never downloads it at all.
 
 Everything is validated with Zod in `src/lib/env.ts`, so the process fails fast with a readable message when a variable is missing.

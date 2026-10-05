@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -36,6 +37,11 @@ export function LoginForm({ next }: { next: string }) {
             autoFocus
             placeholder="you@company.com"
             invalid={field.invalid}
+            // React empties the form once the action returns, so without this a
+            // mistyped password would arrive having also thrown away the address
+            // it was mistyped against. The password itself is never echoed:
+            // `submittedValues` drops anything that looks like a secret.
+            defaultValue={state.values?.email ?? ""}
           />
         )}
       </Field>
@@ -57,6 +63,12 @@ export function LoginForm({ next }: { next: string }) {
       <SubmitButton pendingLabel="Signing in…" fullWidth size="lg">
         Sign in
       </SubmitButton>
+
+      <div className="text-center">
+        <Link href="/forgot-password" className="text-c54-sm text-c54-text-secondary hover:underline">
+          Forgot password?
+        </Link>
+      </div>
     </form>
   );
 }

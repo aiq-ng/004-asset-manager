@@ -1,17 +1,18 @@
 import { Suspense } from "react";
 
 import Link from "next/link";
+import { Mail, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { FilterBar } from "@/features/shared/filter-bar";
 import type { DepartmentOption } from "@/features/departments/department-select";
 import { StaffCreateButton, StaffEditButton } from "@/features/staff/staff-forms";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { rolePresentation, STAFF_ROLES } from "@/features/staff/role-presentation";
 import { StaffRoleBadge } from "@/features/staff/staff-role-badge";
 import { listDepartmentOptions } from "@/lib/services/departments";
@@ -25,8 +26,12 @@ import { listStaffQuerySchema } from "@/lib/validators/staff";
 /** Staff directory. Reads are open to any signed-in user; management is gated. */
 export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
   const actor = await requirePageActor();
-  const current = normalizeSearchParams(await searchParams);
+  const params = await searchParams;
+  const current = normalizeSearchParams(params);
   const query = await queryFromSearchParams(listStaffQuerySchema, Promise.resolve(current));
+  // From the raw params, not `current`: a bare `?new` is an empty value, and
+  // `normalizeSearchParams` drops exactly those.
+  const openSheet = can(actor.role, "staff:manage") && wantsCreateSheet(params);
 
   const results = listStaff(query);
   const canManage = can(actor.role, "staff:manage");
@@ -39,7 +44,14 @@ export default async function StaffPage({ searchParams }: PageProps<"/staff">) {
       <PageHeader
         title="Staff"
         description="Everyone who can hold an asset, and what they are allowed to do."
-        actions={canManage ? <StaffCreateButton departments={departments} /> : null}
+        actions={
+          canManage ? (
+            <StaffCreateButton
+              departments={departments}
+              openInitially={openSheet}
+            />
+          ) : null
+        }
       />
 
       <div className="flex flex-col gap-c54-section">
@@ -104,7 +116,7 @@ async function StaffResults({
     return (
       <Card>
         <EmptyState
-          icon={<Icons.Users className="size-5" />}
+          icon={<Users className="size-5" />}
           title={hasActiveFilters(current) ? "Nobody matches those filters" : "No staff yet"}
           description={
             hasActiveFilters(current)
@@ -126,7 +138,7 @@ async function StaffResults({
               <TableHeader>Department</TableHeader>
               <TableHeader>Email</TableHeader>
               <TableHeader className="w-40">Role</TableHeader>
-              <TableHeader className="w-32">Phone</TableHeader>
+              <TableHeader className="w-40 whitespace-nowrap">Phone</TableHeader>
               {canManage ? <TableHeader className="w-28" /> : null}
             </TableRow>
           </thead>
@@ -144,14 +156,20 @@ async function StaffResults({
                     href={`mailto:${person.email}`}
                     className="flex items-center gap-c54-2 hover:underline"
                   >
-                    <Icons.Mail className="size-3.5 shrink-0 text-c54-text-muted" />
+                    <Mail className="size-3.5 shrink-0 text-c54-text-muted" />
                     <span className="truncate">{person.email}</span>
                   </a>
                 </TableCell>
                 <TableCell>
                   <StaffRoleBadge role={person.role} />
                 </TableCell>
-                <TableCell className="text-c54-xs text-c54-text-secondary">
+                {/* `whitespace-nowrap` because a phone number is one value, not
+                    prose: letting it wrap puts "912 345" under "+351" and makes
+                    two rows in the same column visually impossible to line up.
+                    `Table` scrolls horizontally when a column genuinely cannot
+                    fit, which is the better failure than a broken number.
+                    `tabular-nums` so the digits align down the column. */}
+                <TableCell className="text-c54-xs whitespace-nowrap tabular-nums text-c54-text-secondary">
                   {person.phone ?? <span className="text-c54-text-muted">—</span>}
                 </TableCell>
                 {canManage ? (

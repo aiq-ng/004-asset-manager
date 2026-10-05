@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronRight, LogOut } from "lucide-react";
+
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,12 +10,17 @@ import {
   DropdownMenu,
   DropdownSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Icons } from "@/components/ui/icons";
 import { logoutAction } from "@/features/auth/actions";
 import type { StaffRole } from "@/generated/prisma/client";
 
 /**
  * Account menu.
+ *
+ * Identity, role and sign-out — nothing else. There used to be an
+ * "Account & appearance" link to `/settings` here, left over from before
+ * `SidebarUserSection` moved that job into the sidebar switch; it was a second
+ * route to the same two things and the one most likely to rot, since the sidebar
+ * version is what anybody actually reaches for.
  *
  * Sign-out posts a Server Action from inside the menu rather than navigating to
  * a route, because logging out bumps `sessionVersion` — it is a mutation, not a
@@ -49,7 +56,7 @@ export function UserMenu({
             </span>
             <span className="block max-w-40 truncate text-c54-2xs text-c54-text-muted">{department}</span>
           </span>
-          <Icons.ChevronRight className="size-3 rotate-90 text-c54-text-muted" />
+          <ChevronRight className="size-3 rotate-90 text-c54-text-muted" />
         </button>
       )}
     >
@@ -62,16 +69,11 @@ export function UserMenu({
         </Badge>
       </div>
       <DropdownSeparator />
-      <DropdownItem href="/settings">
-        <Icons.User className="size-3.5" />
-        Account &amp; appearance
-      </DropdownItem>
-      <DropdownSeparator />
       {/* A submit button inside the menu, so sign-out is one progressive-enhancement
           form rather than a click handler that only exists after hydration. */}
       <form action={logoutAction}>
         <DropdownItem type="submit" danger>
-          <Icons.Logout className="size-3.5" />
+          <LogOut className="size-3.5" />
           Sign out
         </DropdownItem>
       </form>

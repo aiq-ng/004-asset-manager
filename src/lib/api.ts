@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import type { ZodError, ZodType } from "zod";
 
 import { getActor, requireActor } from "@/lib/auth/actor";
-import type { Permission } from "@/lib/auth/permissions";
+import type { Actor, Permission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/permissions";
 import { AUDIT_ACTIONS } from "@/lib/audit/events";
 import {
@@ -11,11 +11,12 @@ import {
   recordAudit,
   runWithRequestContext,
 } from "@/lib/audit/context";
-import { installAuditPublisher } from "@/lib/audit/queue";
 import { ApiError, fromPrismaError } from "@/lib/errors";
 
-// Installing the publisher once per process keeps BullMQ out of every service.
-installAuditPublisher();
+// Installs the audit publisher for this module instance, keeping BullMQ out of
+// every service. Imported for the side effect; see `lib/audit/install.ts` for why
+// the Server Action path has to do the same.
+import "@/lib/audit/install";
 
 export interface PaginationMeta {
   page: number;
@@ -156,10 +157,30 @@ function withRequestPipeline<Ctx>(handler: RouteHandler<Ctx>): RouteHandler<Ctx>
   };
 }
 
+/**
+ * The allow-list of endpoints an invited session may reach while it is still
+ * carrying a temporary password: set their own password, sign out, or read who
+ * they are. Everything else waits until the password is replaced.
+ */
+const PASSWORD_CHANGE_EXEMPT_PATHS = new Set([
+  "/api/auth/change-password",
+  "/api/auth/logout",
+  "/api/auth/me",
+]);
+
+function assertPasswordReplaced(actor: Actor, pathname: string): void {
+  if (actor.mustChangePassword && !PASSWORD_CHANGE_EXEMPT_PATHS.has(pathname)) {
+    throw ApiError.forbidden(
+      "This account is signed in with a temporary password. Set a new one before continuing.",
+    );
+  }
+}
+
 /** Any signed-in user. */
 export function apiRoute<Ctx>(handler: RouteHandler<Ctx>): RouteHandler<Ctx> {
   return withRequestPipeline(async (request, ctx) => {
-    await requireActor();
+    const actor = await requireActor();
+    assertPasswordReplaced(actor, request.nextUrl.pathname);
     return handler(request, ctx);
   });
 }
@@ -182,6 +203,7 @@ export function permissionRoute<Ctx>(
 
     try {
       requirePermission(actor, permission);
+      assertPasswordReplaced(actor, request.nextUrl.pathname);
       return await handler(request, ctx);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {

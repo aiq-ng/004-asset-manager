@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { Inbox } from "lucide-react";
 
 import { Badge, CodeChip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { statusPresentation } from "@/features/assets/asset-status";
 import { AssetRowActions } from "@/features/assets/asset-row-actions";
@@ -26,9 +26,10 @@ export interface AssetListItem {
   id: string;
   assetId: string;
   description: string;
+  brand: string | null;
+  model: string | null;
   status: string;
   serialNumber: string | null;
-  unit: number;
   assetType: { id: string; name: string; code: string };
   assignedTo: { id: string; name: string; department: string } | null;
   createdAt: string;
@@ -61,7 +62,10 @@ export function AssetTable({
               </TableHeader>
               <TableHeader className="w-44">Asset ID</TableHeader>
               <TableHeader>Description</TableHeader>
+              <TableHeader className="w-32">Brand</TableHeader>
+              <TableHeader className="w-40">Model</TableHeader>
               <TableHeader className="w-32">Type</TableHeader>
+              <TableHeader className="w-36">Serial No.</TableHeader>
               <TableHeader className="w-36">Status</TableHeader>
               <TableHeader className="w-48">Assigned to</TableHeader>
               <TableHeader className="w-32">Added</TableHeader>
@@ -85,10 +89,14 @@ export function AssetTable({
                   <Link href={`/assets/${asset.assetId}`} className="block truncate font-c54-medium">
                     {asset.description}
                   </Link>
-                  {asset.serialNumber ? (
-                    <span className="text-c54-2xs text-c54-text-muted">S/N {asset.serialNumber}</span>
-                  ) : null}
                 </TableCell>
+                <TableCell className="text-c54-xs text-c54-text-secondary">
+                  <span className="block truncate">{asset.brand ?? "—"}</span>
+                </TableCell>
+                <TableCell className="text-c54-xs text-c54-text-secondary">
+                  <span className="block truncate">{asset.model ?? "—"}</span>
+                </TableCell>
+                <TableCell>{asset.serialNumber ?? "—"}</TableCell>
                 <TableCell className="text-c54-xs text-c54-text-secondary">{asset.assetType.name}</TableCell>
                 <TableCell>
                   <StatusBadge status={asset.status} />
@@ -137,6 +145,9 @@ export function AssetTable({
               </Link>
               <p className="mt-c54-1 text-c54-2xs text-c54-text-muted">
                 {asset.assetType.name}
+                {asset.brand || asset.model
+                  ? ` · ${[asset.brand, asset.model].filter(Boolean).join(" ")}`
+                  : ""}
                 {asset.assignedTo ? ` · ${asset.assignedTo.name}` : ""}
               </p>
             </div>
@@ -160,7 +171,7 @@ export function StatusBadge({ status, size = "md" }: { status: string; size?: "s
   const presentation = statusPresentation(status);
 
   return (
-    <Badge tone={presentation.tone} dot size={size} title={presentation.hint}>
+    <Badge tone={presentation.tone} icon={presentation.icon} size={size} title={presentation.hint}>
       {presentation.label}
     </Badge>
   );
@@ -174,7 +185,7 @@ export function AssetEmptyState({ filtered }: { filtered: boolean }) {
   return (
     <Card>
       <EmptyState
-        icon={<Icons.Inbox className="size-5" />}
+        icon={<Inbox className="size-5" />}
         title={filtered ? "No assets match those filters" : "No assets registered yet"}
         description={
           filtered

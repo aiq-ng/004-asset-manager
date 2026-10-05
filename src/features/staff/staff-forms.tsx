@@ -1,15 +1,16 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus } from "lucide-react";
 
 import { createStaffAction, updateStaffAction } from "@/features/staff/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { DepartmentSelect, type DepartmentOption } from "@/features/departments/department-select";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import { ASSIGNABLE_ROLES, rolePresentation } from "@/features/staff/role-presentation";
@@ -18,9 +19,12 @@ import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password-policy";
 /**
  * Create a staff account, in a right-hand sheet.
  *
- * The password field is optional on purpose: an account created without one is
- * locked and cannot sign in, which is the right default when somebody joins
- * before they have collected their credentials.
+ * The password is required here, and deliberately so. The service can create a
+ * locked account with no password at all — that is what the API and the invite
+ * flow are for — but a `<form>` always submits its field, and an empty string is
+ * a string: `passwordSchema.optional()` skips `undefined`, not `""`, so leaving
+ * the box blank was always refused while the hint under it invited exactly that.
+ * Requiring it in the browser is what makes the two agree.
  *
  * `createStaffAction` redirects to the new record on success, so this does not
  * have to close itself — the navigation takes the sheet with it. The redirect is
@@ -34,7 +38,7 @@ function StaffCreateDialog({
   departments: DepartmentOption[];
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(createStaffAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(createStaffAction, INITIAL_ACTION_STATE);
 
   return (
     <Dialog
@@ -43,29 +47,47 @@ function StaffCreateDialog({
       side="right"
       title="Add a staff member"
       description="Create an account for somebody who can hold an asset."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="staff-create-form" pendingLabel="Creating…">
-            <Icons.Plus className="size-3.5" />
+          <SubmitButton form="staff-create-form" pendingLabel="Creating…" pending={pending}>
+            <Plus className="size-3.5" />
             Create account
           </SubmitButton>
         </>
       }
     >
       <form id="staff-create-form" action={formAction} className="flex flex-col gap-c54-4">
+        {/* Every text field is seeded from the last submission: React empties an
+            uncontrolled form once its action returns, so a rejected account would
+            otherwise arrive having thrown away the name and the address along
+            with whichever field was wrong. Passwords are deliberately absent —
+            `submittedValues` never echoes them. */}
         {state.error ? <Alert tone="danger">{state.error}</Alert> : null}
 
         <Field label="Name" htmlFor="staff-name" error={state.fieldErrors?.name} required>
           {(field) => (
-            <Input {...field} id={field.id} name="name" placeholder="Ana Ribeiro" autoComplete="off" />
+            <Input
+              {...field}
+              id={field.id}
+              name="name"
+              placeholder="Ana Ribeiro"
+              autoComplete="off"
+              defaultValue={state.values?.name ?? ""}
+            />
           )}
         </Field>
 
         <DepartmentSelect
+          // Re-keyed on what came back, because a `<select>` only reads its
+          // `defaultValue` at mount. The combobox branch keeps its own state and
+          // needs nothing; the native one is put back by the remount.
+          key={state.values?.departmentId ?? "unsubmitted"}
           departments={departments}
           id="staff-department"
           name="departmentId"
+          defaultValue={state.values?.departmentId ?? ""}
           error={state.fieldErrors?.departmentId ?? state.fieldErrors?.department}
         />
 
@@ -78,12 +100,22 @@ function StaffCreateDialog({
               type="email"
               placeholder="ana.ribeiro@example.com"
               autoComplete="off"
+              defaultValue={state.values?.email ?? ""}
             />
           )}
         </Field>
 
         <Field label="Phone" htmlFor="staff-phone" error={state.fieldErrors?.phone}>
-          {(field) => <Input {...field} id={field.id} name="phone" type="tel" placeholder="Optional" />}
+          {(field) => (
+            <Input
+              {...field}
+              id={field.id}
+              name="phone"
+              type="tel"
+              placeholder="Optional"
+              defaultValue={state.values?.phone ?? ""}
+            />
+          )}
         </Field>
 
         <Field
@@ -94,7 +126,13 @@ function StaffCreateDialog({
           required
         >
           {(field) => (
-            <Select {...field} id={field.id} name="role" defaultValue="USER">
+            <Select
+              {...field}
+              id={field.id}
+              name="role"
+              key={state.values?.role ?? "unsubmitted"}
+              defaultValue={state.values?.role ?? "USER"}
+            >
               {ASSIGNABLE_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {rolePresentation(role).label}
@@ -108,7 +146,8 @@ function StaffCreateDialog({
           label="Initial password"
           htmlFor="staff-password"
           error={state.fieldErrors?.password}
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters. Leave blank to create a locked account.`}
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters. Hand it over out of band; they can change it from Settings once they are in.`}
+          required
         >
           {(field) => (
             <Input
@@ -118,6 +157,7 @@ function StaffCreateDialog({
               type="password"
               autoComplete="new-password"
               minLength={MIN_PASSWORD_LENGTH}
+              required
             />
           )}
         </Field>
@@ -133,14 +173,24 @@ function StaffCreateDialog({
  * so a closed sheet leaves no `<dialog>` in the top layer and no state to reset
  * when it is dismissed — reopening always starts from the initial action state.
  */
-export function StaffCreateButton({ departments }: { departments: DepartmentOption[] }) {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+export function StaffCreateButton({
+  departments,
+  openInitially = false,
+}: {
+  departments: DepartmentOption[];
+  /** Open the sheet on arrival, for `/staff?new`. See `create-sheet-param`. */
+  openInitially?: boolean;
+}) {
+  const [open, setOpen] = useState(openInitially);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add staff member
       </Button>
       {open ? (
@@ -174,7 +224,7 @@ export function StaffEditDialog({
   departments: DepartmentOption[];
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(updateStaffAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(updateStaffAction, INITIAL_ACTION_STATE);
   const locked = staff.role === "SUPERADMIN";
 
   return (
@@ -187,10 +237,16 @@ export function StaffEditDialog({
           ? "The superadmin account cannot be modified from here."
           : "Leave the password blank to keep the current one."
       }
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="staff-edit-form" pendingLabel="Saving…" disabled={locked}>
+          <SubmitButton
+            form="staff-edit-form"
+            pendingLabel="Saving…"
+            pending={pending}
+            disabled={locked}
+          >
             Save
           </SubmitButton>
         </>
@@ -208,15 +264,25 @@ export function StaffEditDialog({
 
         <Field label="Name" htmlFor="edit-staff-name" error={state.fieldErrors?.name} required>
           {(field) => (
-            <Input {...field} id={field.id} name="name" defaultValue={staff.name} disabled={locked} />
+            <Input
+              {...field}
+              id={field.id}
+              name="name"
+              defaultValue={state.values?.name ?? staff.name}
+              disabled={locked}
+            />
           )}
         </Field>
 
         <DepartmentSelect
+          // Keyed on what came back so a native `<select>` picks the department up
+          // again; without it the reset puts the selection back to the mark React
+          // made at mount and the edit silently reverts this field.
+          key={state.values?.departmentId ?? "unsubmitted"}
           departments={departments}
           id="edit-staff-department"
           name="departmentId"
-          defaultValue={staff.departmentId}
+          defaultValue={state.values?.departmentId ?? staff.departmentId}
           error={state.fieldErrors?.departmentId ?? state.fieldErrors?.department}
           disabled={locked}
         />
@@ -228,7 +294,7 @@ export function StaffEditDialog({
               id={field.id}
               name="email"
               type="email"
-              defaultValue={staff.email}
+              defaultValue={state.values?.email ?? staff.email}
               disabled={locked}
             />
           )}
@@ -242,7 +308,7 @@ export function StaffEditDialog({
                 id={field.id}
                 name="phone"
                 type="tel"
-                defaultValue={staff.phone ?? ""}
+                defaultValue={state.values?.phone ?? staff.phone ?? ""}
                 disabled={locked}
               />
             )}
@@ -259,7 +325,10 @@ export function StaffEditDialog({
                 {...field}
                 id={field.id}
                 name="role"
-                defaultValue={staff.role}
+                // Keyed like the department picker: a `<select>` reads its
+                // `defaultValue` once, at mount.
+                key={state.values?.role ?? "unsubmitted"}
+                defaultValue={state.values?.role ?? staff.role}
                 disabled={locked || !ASSIGNABLE_ROLES.includes(staff.role as never)}
               >
                 {ASSIGNABLE_ROLES.includes(staff.role as never) ? (
@@ -321,7 +390,7 @@ export function StaffEditButton({
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Edit
       </Button>
       {open ? (

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/features/auth/login-form";
 import { getActor } from "@/lib/auth/actor";
+import { superadminExists } from "@/lib/services/staff-bootstrap";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 /**
@@ -17,12 +18,19 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
  * app shell normally does — giving the eye somewhere to land, and signalling that
  * this is a contained, deliberate space rather than a bare form that failed to
  * load. It stays a plain server component; none of this needs a client boundary.
+ *
+ * The superadmin check comes before the session check. On an install with no
+ * superadmin, this form cannot ever succeed — there is no account to authenticate
+ * against — so showing it would be showing a dead end. `/setup` is the only page
+ * that can resolve that state.
  */
 export default async function LoginPage({
   searchParams,
 }: PageProps<"/login">) {
   const params = await searchParams;
   const next = typeof params.next === "string" ? params.next : "/";
+
+  if (!(await superadminExists())) redirect("/setup");
 
   // Already signed in: nothing to do here.
   if (await getActor()) redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");

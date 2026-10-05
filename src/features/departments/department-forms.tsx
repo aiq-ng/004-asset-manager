@@ -1,19 +1,20 @@
 "use client";
 
 import { useActionState, useCallback, useState } from "react";
+import { Pencil, Plus, Trash } from "lucide-react";
 
 import {
   createDepartmentAction,
   deleteDepartmentAction,
   updateDepartmentAction,
 } from "@/features/departments/actions";
+import { clearCreateSheetParam } from "@/features/shared/create-sheet-param";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
 /**
@@ -25,7 +26,10 @@ import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
  * reopening starts from a clean field.
  */
 function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
-  const [state, formAction] = useActionState(createDepartmentAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(
+    createDepartmentAction,
+    INITIAL_ACTION_STATE,
+  );
 
   return (
     <Dialog
@@ -34,11 +38,14 @@ function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
       side="right"
       title="Add a department"
       description="Departments are shared: everybody on staff picks from the same list."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="department-create-form" pendingLabel="Adding…">
-            <Icons.Plus className="size-3.5" />
+          {/* `pending` is passed because this button is in the footer, outside the
+              form below, where `useFormStatus` cannot see it. See `SubmitButton`. */}
+          <SubmitButton form="department-create-form" pendingLabel="Adding…" pending={pending}>
+            <Plus className="size-3.5" />
             Add department
           </SubmitButton>
         </>
@@ -55,6 +62,10 @@ function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
               name="name"
               placeholder="Operations"
               autoComplete="off"
+              // Seeded from the last submission: React empties the form once the
+              // action returns, so a duplicate name would arrive having thrown
+              // away the name that was actually being typed.
+              defaultValue={state.values?.name ?? ""}
             />
           )}
         </Field>
@@ -63,14 +74,17 @@ function DepartmentCreateDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function DepartmentCreateButton() {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+export function DepartmentCreateButton({ openInitially = false }: { openInitially?: boolean }) {
+  const [open, setOpen] = useState(openInitially);
+  const close = useCallback(() => {
+    setOpen(false);
+    clearCreateSheetParam();
+  }, []);
 
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Icons.Plus className="size-3.5" />
+        <Plus className="size-3.5" />
         Add department
       </Button>
       {open ? <DepartmentCreateDialog onClose={close} /> : null}
@@ -92,7 +106,10 @@ function DepartmentRenameDialog({
   department: { id: string; name: string };
   onClose: () => void;
 }) {
-  const [state, formAction] = useActionState(updateDepartmentAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionState(
+    updateDepartmentAction,
+    INITIAL_ACTION_STATE,
+  );
 
   return (
     <Dialog
@@ -101,10 +118,11 @@ function DepartmentRenameDialog({
       side="right"
       title={`Rename ${department.name}`}
       description="Accounts stay in this department; only the label changes."
+      busy={pending}
       footer={
         <>
           <DialogCancelButton />
-          <SubmitButton form="department-rename-form" pendingLabel="Saving…">
+          <SubmitButton form="department-rename-form" pendingLabel="Saving…" pending={pending}>
             Save name
           </SubmitButton>
         </>
@@ -121,7 +139,7 @@ function DepartmentRenameDialog({
               {...field}
               id={field.id}
               name="name"
-              defaultValue={department.name}
+              defaultValue={state.values?.name ?? department.name}
               autoComplete="off"
             />
           )}
@@ -137,7 +155,7 @@ export function DepartmentRenameButton({ department }: { department: { id: strin
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Icons.Edit className="size-3.5" />
+        <Pencil className="size-3.5" />
         Rename
       </Button>
       {open ? (
@@ -172,7 +190,7 @@ export function DepartmentDeleteControl({
         disabled={blocked}
         title={blocked ? `${department.name} still has staff in it` : undefined}
       >
-        <Icons.Trash className="size-3.5" />
+        <Trash className="size-3.5" />
         Delete
       </Button>
 

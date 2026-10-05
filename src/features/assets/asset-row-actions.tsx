@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Ellipsis, ExternalLink, Plus, QrCode, Wrench } from "lucide-react";
 
 import { retireAssetAction, updateAssetStatusAction } from "@/features/assets/actions";
 import { AssignAssetDialog } from "@/features/assets/assign-asset-dialog";
@@ -12,7 +13,6 @@ import {
   DropdownMenu,
   DropdownSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Icons } from "@/components/ui/icons";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 import type { StaffListOption } from "@/features/staff/types";
 
@@ -64,19 +64,19 @@ export function AssetRowActions({
             aria-label={`Actions for ${assetId}`}
             className="inline-flex size-7 items-center justify-center rounded-c54-sm text-c54-text-muted transition-colors hover:bg-c54-action-ghost-hover hover:text-c54-text-primary"
           >
-            <Icons.More />
+            <Ellipsis />
           </button>
         )}
       >
         <DropdownLabel>{assetId}</DropdownLabel>
 
         <DropdownItem href={`/assets/${assetId}`}>
-          <Icons.ExternalLink className="size-3.5" />
+          <ExternalLink className="size-3.5" />
           Open details
         </DropdownItem>
 
         <DropdownItem href={`/assets/${assetId}/label`}>
-          <Icons.Qr className="size-3.5" />
+          <QrCode className="size-3.5" />
           Print label
         </DropdownItem>
 
@@ -84,7 +84,7 @@ export function AssetRowActions({
           <>
             <DropdownSeparator />
             <DropdownItem onClick={() => setAssignOpen(true)}>
-              <Icons.Plus className="size-3.5" />
+              <Plus className="size-3.5" />
               Assign to staff
             </DropdownItem>
           </>
@@ -94,7 +94,7 @@ export function AssetRowActions({
           <>
             <DropdownSeparator />
             <DropdownItem onClick={() => setRepairOpen(true)}>
-              <Icons.Wrench />
+              <Wrench />
               {isRepairing ? "Mark available" : "Send for repair"}
             </DropdownItem>
           </>
@@ -142,7 +142,7 @@ export function AssetRowActions({
         title="Retire this asset?"
         description={
           assigned
-            ? `${assetId} is currently assigned. Return it to staff first — retirement is blocked until then.`
+            ? `${assetId} is currently assigned. Return it to staff first. Retirement is blocked until then.`
             : `${assetId} will be withdrawn from the register. It stays in the database and in the audit trail, and can be recorded as available again later.`
         }
         confirmLabel="Retire asset"

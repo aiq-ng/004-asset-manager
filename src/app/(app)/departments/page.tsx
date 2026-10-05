@@ -1,9 +1,9 @@
 import { Suspense } from "react";
+import { Building } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/feedback";
-import { Icons } from "@/components/ui/icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -12,6 +12,7 @@ import {
   DepartmentRenameButton,
 } from "@/features/departments/department-forms";
 import { listDepartments } from "@/lib/services/departments";
+import { wantsCreateSheet } from "@/features/shared/create-sheet-param";
 import { can } from "@/lib/auth/permissions";
 import { requirePageActor } from "@/lib/server/guard";
 
@@ -22,16 +23,20 @@ import { requirePageActor } from "@/lib/server/guard";
  * filters, so hiding the list would only make them harder to recognise. Adding,
  * renaming and deleting are gated on `department:manage`.
  */
-export default async function DepartmentsPage() {
+export default async function DepartmentsPage({ searchParams }: PageProps<"/departments">) {
   const actor = await requirePageActor();
   const canManage = can(actor.role, "department:manage");
+  // `/departments?new` opens the sheet directly, so the dashboard can link here
+  // instead of to a route that does not exist. Ignored when the person cannot
+  // manage departments anyway — the button that owns the sheet is not rendered.
+  const openSheet = canManage && wantsCreateSheet(await searchParams);
 
   return (
     <>
       <PageHeader
         title="Departments"
         description="The list staff accounts pick from, so every spelling of a department stays consistent."
-        actions={canManage ? <DepartmentCreateButton /> : null}
+        actions={canManage ? <DepartmentCreateButton openInitially={openSheet} /> : null}
       />
 
       <div className="flex flex-col gap-c54-section">
@@ -50,7 +55,7 @@ async function DepartmentResults({ canManage }: { canManage: boolean }) {
     return (
       <Card>
         <EmptyState
-          icon={<Icons.Building className="size-5" />}
+          icon={<Building className="size-5" />}
           title="No departments yet"
           description={
             canManage
@@ -77,7 +82,7 @@ async function DepartmentResults({ canManage }: { canManage: boolean }) {
             <TableRow key={department.id}>
               <TableCell>
                 <span className="flex items-center gap-c54-2">
-                  <Icons.Building className="size-3.5 shrink-0 text-c54-text-muted" />
+                  <Building className="size-3.5 shrink-0 text-c54-text-muted" />
                   <span className="text-c54-sm font-c54-medium">{department.name}</span>
                 </span>
               </TableCell>

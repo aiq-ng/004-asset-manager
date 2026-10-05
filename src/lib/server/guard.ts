@@ -20,6 +20,13 @@ import { can, type Actor, type Permission } from "@/lib/auth/permissions";
 export const requirePageActor = cache(async (): Promise<Actor> => {
   const actor = await getActor();
   if (!actor) redirect("/login");
+
+  // An invited session signs in with a temporary password that arrived by
+  // email; nothing else in the app is reachable until they replace it. The
+  // change-password page itself reads the actor directly (not through here),
+  // so this cannot loop.
+  if (actor.mustChangePassword) redirect("/change-password");
+
   return actor;
 });
 

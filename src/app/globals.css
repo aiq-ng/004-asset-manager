@@ -27,6 +27,7 @@
   --animate-fade-in: fade-in var(--c54-duration-fast) var(--c54-ease-out) both;
   --animate-fade-out: fade-out var(--c54-duration-fast) var(--c54-ease-out) both;
   --animate-rise: rise var(--c54-duration-base) var(--c54-ease-out) both;
+  --animate-rise-up: rise-up var(--c54-duration-base) var(--c54-ease-out) both;
   --animate-slide-in: slide-in var(--c54-duration-base) var(--c54-ease-out) both;
   --animate-sheet-in: sheet-in var(--c54-duration-slow) var(--c54-ease-out) both;
   --animate-sheet-out: sheet-out var(--c54-duration-base) var(--c54-ease-in-out) both;
@@ -106,6 +107,20 @@
   from {
     opacity: 0;
     transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mirror of `rise` for panels that open above their trigger: the motion must
+   grow out of the edge the panel is anchored to, so an upward-flipped menu
+   slides up from the trigger rather than down from thin air. */
+@keyframes rise-up {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
   }
   to {
     opacity: 1;
@@ -193,8 +208,7 @@
  * The typeface override rides the same seam for the same reason: the package
  * asks for Geist, the app ships Inter, and pointing the `font.family` tokens at
  * the `next/font` variables swaps the whole UI without touching a single
- * component. `--font-inter` / `--font-geist-mono` are defined on <html> by
- * src/app/layout.tsx.
+ * component. `--font-inter` is defined on <html> by src/app/layout.tsx.
  *
  * Unlayered on purpose: the generated token sheet is unlayered too, and these
  * equal-specificity selectors only win because they come later in the cascade.
@@ -214,7 +228,7 @@
 
   --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
   --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
-  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --c54-font-family-mono: var(--font-inter), ui-monospace, monospace;
 }
 
 [data-c54-theme][data-c54-mode="dark"] {
@@ -223,7 +237,7 @@
 
   --c54-font-family-heading: var(--font-inter), system-ui, sans-serif;
   --c54-font-family-body: var(--font-inter), system-ui, sans-serif;
-  --c54-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --c54-font-family-mono: var(--font-inter), ui-monospace, monospace;
 }
 
 @layer base {
@@ -239,6 +253,12 @@
 
   html[data-c54-mode="dark"] {
     color-scheme: dark;
+  }
+
+  /* The app shell's content column is white in light mode, so pages read as
+     sheets on the gray canvas. Dark mode keeps the token surface. */
+  [data-c54-theme]:not([data-c54-mode="dark"]) .c54-app-content {
+    background-color: #fff;
   }
 
   body {
@@ -390,20 +410,39 @@
 
   .c54-data-table thead tr:first-child th:last-child {
     border-top-right-radius: var(--c54-radius-card);
-  }
+  }/*
+ * Replace everything from your first `@media print` to the end of globals.css
+ * with this.
+ *
+ * Labels are printed and cut by a vendor who works in inches and takes JPEGs,
+ * one image per label: 4 x 2.25in trim (exactly 16:9, so the tag's proportions
+ * are unchanged) plus 0.125in bleed on every side = 4.25 x 2.5in. Only content
+ * inside `.c54-label-run` uses the label page (a named page); every other
+ * screen still prints on A4.
+ */
+
+/* No bleed unless a print rule asks for it, so the screen tag is trim-exact. */
+.c54-asset-tag {
+  --bleed: 0mm;
 }
 
 @media print {
-  /* Paper is declared rather than assumed. Left to itself the browser picks its
-     own default — Letter, in most of the world — which is narrower and taller
-     than A4 and silently slices every sheet in two, turning a 5-sheet run into 10
-     pages of half-blank paper. The margin is zero because each sheet carries its
-     own 10mm padding and padding the box twice would move every label. */
+  /* Default paper is declared, not assumed. Left alone the browser picks Letter. */
   @page {
     size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* Label page = trim 4 x 2.25in + 0.125in bleed. If the PDF comes out with
+     blank pages, make the height 2.51in; the extra 0.01in is bleed area. */
+  @page label {
+    size: 4.25in 2.5in;
     margin: 0;
   }
 
+  /* The page canvas takes its colour from `html`, not `body`; the screen theme
+     paints it grey, which would show in the bleed zone. */
+  html,
   body {
     background: #fff;
     color: #000;
@@ -413,90 +452,29 @@
     display: none !important;
   }
 
-  /* The single-tag page has no grid of its own, so it inherits the zero page
-     margin above and would otherwise print edge to edge. */
-  .c54-label-single {
-    padding: 10mm;
-  }
-
-  /* The asset tag prints itself: colours forced on (browsers skip backgrounds
-     by default) and kept whole on one page. */
+  /* Colours forced on (browsers skip backgrounds by default), kept whole. */
   .c54-asset-tag {
     break-inside: avoid;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  /* Batch label sheets. The tag scales itself from the cell width, so the only
-     job here is the page box and the grid — no per-label sizing anywhere. */
-  .c54-label-preview {
-    display: none;
+  .c54-label-run {
+    page: label;
   }
 
-  .c54-label-page {
-    display: grid;
-    grid-template-columns: repeat(var(--label-columns), 1fr);
-    gap: var(--label-gap, 4mm);
-    box-sizing: border-box;
-    /* Width is explicit because the grid's column count depends on it; height is
-       not. A sheet declared as exactly 297mm tall overflows the 297mm print box
-       by a sub-pixel, and the browser resolves that by emitting a blank extra
-       page after each one — 10 sheets of paper became 12. The grid's natural
-       height already stops at the bottom margin, so the sheet ends flush without
-       being told to. */
-    inline-size: 210mm;
-    padding: var(--label-margin, 10mm);
-    /* Start-aligned, never stretched. The cells are exactly tag-shaped (see
-       `.c54-label-cell`), so stretching rows would open a dead strip under every
-       label and drag the cut guides off the positions the preview showed. */
-    align-content: start;
-    justify-content: stretch;
+  /* Direct children only, and the tags must be siblings: every tag but the last
+     breaks the page after itself. */
+  .c54-label-run > .c54-asset-tag {
+    --bleed: 0.125in; /* must match the 0.125in in @page label and the margin below */
+    width: 4in;
+    max-width: none;
+    margin: 0.125in 0.125in 0;
+    break-after: page;
   }
 
-  /* An explicit break per sheet. A grid is not one box, so `break-inside` on a
-     cell alone would let the browser start a new sheet mid-row. */
-  .c54-label-page + .c54-label-page {
-    break-before: page;
-  }
-
-  /* Rows are sized from the tag's own 16:9 frame rather than with a fixed height,
-     which is what makes the grid land exactly on the bottom margin at any column
-     count. The cell needs `min-inline-size: 0` to be allowed to shrink inside the
-     grid track, otherwise the tag's intrinsic width wins and the columns overrun
-     the page. */
-  .c54-label-cell {
-    aspect-ratio: 16 / 9;
-    break-inside: avoid;
-    min-inline-size: 0;
-    display: flex;
+  .c54-label-run > .c54-asset-tag:last-child {
+    break-after: auto;
   }
 }
-
-/* On screen the sheet scales to the viewport but keeps A4's proportions, so the
-   preview has the same aspect as the paper it stands in for. */
-@screen {
-  .c54-label-documents {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .c54-label-page {
-    display: grid;
-    grid-template-columns: repeat(var(--label-columns), 1fr);
-    gap: var(--label-gap, 4mm);
-    box-sizing: border-box;
-    background: #fff;
-    padding: var(--label-margin, 10mm);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
-    inline-size: 100%;
-    max-inline-size: 210mm;
-    aspect-ratio: 210 / 297;
-  }
-
-  .c54-label-cell {
-    aspect-ratio: 16 / 9;
-    min-inline-size: 0;
-    display: flex;
-  }
 }

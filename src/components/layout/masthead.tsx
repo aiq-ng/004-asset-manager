@@ -34,7 +34,9 @@ export function Masthead({
         <div className="flex h-14 items-center gap-c54-3 px-c54-pad-lg">
           <MobileNavTrigger open={navOpen} onToggle={() => setNavOpen((current) => !current)} />
 
-          <Link href="/" className="flex min-w-0 items-center gap-c54-3">
+          {/* Brand lives in the sidebar on desktop; shown here only while the
+              sidebar is hidden below `lg`. */}
+          <Link href="/" className="flex min-w-0 items-center gap-c54-3 lg:hidden">
             {/* Brand mark from /public: static, so no next/image optimization
                 hop; fixed height with a bounded width keeps any transparent
                 padding in the file from stretching the bar. */}
@@ -56,10 +58,6 @@ export function Masthead({
           </Link>
 
           <div className="ml-auto flex items-center gap-c54-1">
-            <span className="hidden items-center gap-c54-2 rounded-c54-pill border border-c54-border-strong bg-c54-bg-card/60 px-c54-3 py-0.5 font-c54-mono text-c54-2xs text-c54-text-secondary md:inline-flex">
-              <span className="size-1.5 rounded-c54-full bg-c54-status-healthy" />
-              Operational
-            </span>
             <ThemeToggle />
             <div className="rounded-c54-full bg-c54-bg-card/95 ring-1 ring-c54-border-default ring-inset">
               <UserMenu {...actor} />
