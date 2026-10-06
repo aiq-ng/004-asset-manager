@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Archive,
   ArrowLeftRight,
   Building,
   FileText,
@@ -30,6 +31,7 @@ const NAV_GLYPHS: Record<NavIcon, React.ComponentType<{ className?: string }>> =
   layers: Layers,
   users: Users,
   building: Building,
+  archive: Archive,
   audit: FileText,
 };
 

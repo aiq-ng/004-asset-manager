@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Grid2x2, Image, Info, LockKeyhole, LogIn, LogOut, Pencil, ShieldCheck, Trash, Upload, UserPlus } from "lucide-react";
+import { Archive, ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Eye, Grid2x2, Image, Info, KeyRound, LockKeyhole, LogIn, LogOut, Pencil, ShieldCheck, Trash, Trash2, Upload, UserPlus } from "lucide-react";
 
 import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
 
@@ -34,6 +34,13 @@ const ACTIONS: Record<string, ActionPresentation> = {
   ASSET_RETIRED: { label: "Asset retired", group: "asset", tone: "warning", icon: Archive },
   ASSET_IMAGE_UPLOADED: { label: "Image uploaded", group: "asset", tone: "neutral", icon: Upload },
   ASSET_IMAGE_REMOVED: { label: "Image removed", group: "asset", tone: "neutral", icon: Image },
+
+  // Device passwords are `security`, not `asset`: the value is a live credential,
+  // and reading one is the kind of act an investigation starts from — the same
+  // reasoning that puts STAFF_ROLE_CHANGED in this group rather than in `staff`.
+  ASSET_PASSWORD_SET: { label: "Device password set", group: "security", tone: "warning", icon: KeyRound },
+  ASSET_PASSWORD_REVEALED: { label: "Device password read", group: "security", tone: "warning", icon: Eye },
+  ASSET_PASSWORD_CLEARED: { label: "Device password cleared", group: "security", tone: "neutral", icon: Trash2 },
 
   ASSET_TYPE_CREATED: { label: "Type created", group: "asset", tone: "success", icon: Grid2x2 },
   ASSET_TYPE_UPDATED: { label: "Type updated", group: "asset", tone: "info", icon: Pencil },

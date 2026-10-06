@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { Ellipsis, ExternalLink, Plus, QrCode, Wrench } from "lucide-react";
 
-import { retireAssetAction, updateAssetStatusAction } from "@/features/assets/actions";
+import { retireAssetAction, updateAssetStatusAction, archiveAssetAction } from "@/features/assets/actions";
 import { AssignAssetDialog } from "@/features/assets/assign-asset-dialog";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Alert } from "@/components/ui/feedback";
@@ -46,6 +46,8 @@ export function AssetRowActions({
   const [repairState, repairAction] = useActionState(updateAssetStatusAction, INITIAL_ACTION_STATE);
   const [retireState, retireAction] = useActionState(retireAssetAction, INITIAL_ACTION_STATE);
   const [retireOpen, setRetireOpen] = useState(false);
+  const [archiveState, archiveAction] = useActionState(archiveAssetAction, INITIAL_ACTION_STATE);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
 
   const settable = status !== "ASSIGNED" && status !== "RETIRED";
@@ -108,6 +110,19 @@ export function AssetRowActions({
             </DropdownItem>
           </>
         ) : null}
+
+        {/* Gated on `canManage` alone rather than on `settable`: archiving is
+            the correction for a record that should not have been created, and
+            an asset somebody has already retired is exactly the kind of row
+            that turns out to be a mistake. */}
+        {canManage ? (
+          <>
+            <DropdownSeparator />
+            <DropdownItem danger onClick={() => setArchiveOpen(true)}>
+              Archive record
+            </DropdownItem>
+          </>
+        ) : null}
       </DropdownMenu>
 
       {staff ? (
@@ -150,6 +165,22 @@ export function AssetRowActions({
         fields={{ assetId }}
       >
         {retireState.error ? <Alert tone="danger">{retireState.error}</Alert> : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={archiveOpen && !archiveState.ok}
+        onClose={() => setArchiveOpen(false)}
+        title="Archive this record?"
+        description={
+          assigned
+            ? `${assetId} is currently assigned. Return it to staff first. Archiving is blocked until then.`
+            : `${assetId} will leave the register: off the dashboard, out of assignment lists, and off the public tag page. The row and its history are kept, the asset id stays spent, and only admins will see it in the archive.`
+        }
+        confirmLabel="Archive record"
+        action={archiveAction}
+        fields={{ assetId }}
+      >
+        {archiveState.error ? <Alert tone="danger">{archiveState.error}</Alert> : null}
       </ConfirmDialog>
     </>
   );

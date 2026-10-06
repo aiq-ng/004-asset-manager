@@ -18,6 +18,7 @@ export type NavIcon =
   | "layers"
   | "users"
   | "building"
+  | "archive"
   | "audit";
 
 export interface NavItem {
@@ -52,6 +53,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: "Departments",
     description: "The shared department list",
     icon: "building",
+  },
+  {
+    href: "/archive",
+    label: "Archive",
+    description: "Records taken off the register",
+    // Unlike the areas above, the archive hides rows from everyone else
+    // entirely, so the entry itself is gated rather than showing an empty
+    // screen to somebody who is not allowed to see it.
+    permission: "archive:read",
+    icon: "archive",
   },
   // {
   //   href: "/audit",

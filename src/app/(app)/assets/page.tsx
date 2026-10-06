@@ -17,7 +17,7 @@ import {
   AssetTable,
   AssetTableShell,
   AssetTableSkeleton,
-  type AssetListItem,
+  toAssetListItem,
 } from "@/features/assets/asset-table";
 import { ASSET_STATUSES, statusPresentation } from "@/features/assets/asset-status";
 import {
@@ -250,7 +250,7 @@ async function AssetResults({
     <AssetSelectionProvider matching={matching}>
       <AssetTableShell>
         <AssetTable
-          assets={items as AssetListItem[]}
+          assets={items.map(toAssetListItem)}
           {...permissions}
           staff={candidates}
           now={now}

@@ -28,8 +28,10 @@ export const GET = apiRoute(
       ...Object.fromEntries(request.nextUrl.searchParams),
     });
 
-    const asset = await prisma.asset.findUnique({
-      where: id.startsWith("IT-") ? { assetId: id } : { id },
+    const asset = await prisma.asset.findFirst({
+      // Archived records answer 404 here too, so a label cannot be printed for
+      // a record somebody deliberately took off the register.
+      where: { ...(id.startsWith("IT-") ? { assetId: id } : { id }), archivedAt: null },
       select: { assetId: true },
     });
 

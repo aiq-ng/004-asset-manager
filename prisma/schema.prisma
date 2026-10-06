@@ -27,6 +27,11 @@
 // - `Staff.sessionVersion` makes stateless session cookies revocable: it is
 //   embedded in the cookie and checked on every request, so signing out or
 //   resetting a password invalidates tokens that were already handed out.
+// - `Asset.password` holds the device password — the app's only *reversible*
+//   secret, deliberately in plaintext (see the field comment below for why, and
+//   for what that costs). It is written and read only through
+//   src/lib/services/asset-passwords.ts; before adding it to a query, a DTO or
+//   an export, read that file's header first.
 
 generator client {
   provider = "prisma-client"
@@ -80,6 +85,59 @@ model Asset {
   assetType   AssetType    @relation(fields: [assetTypeId], references: [id])
   assignments Assignment[]
 
+  // Archive: a soft delete for a record that should not have been created, as
+  // opposed to `status: RETIRED`, which is a real device leaving circulation.
+  // NULL on every live row, and every read path filters on it, so an archived
+  // asset is invisible to the register, the dashboard, assignment pickers, label
+  // runs and the public tag page.
+  //
+  // Deliberately NOT reversible and deliberately NOT freeing the asset id:
+  // archiving never rewinds the `Counter`, so an id can never come to mean a
+  // different laptop than the one on the label already stuck to it.
+  archivedAt   DateTime?
+  archivedById String?
+  archivedBy   Staff?     @relation("AssetArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  // Device credentials: the password the asset itself is protected by, so an
+  // ADMIN can read it back at any point in the asset's life rather than being
+  // locked out by a password somebody set and forgot to record.
+  //
+  // Stored in PLAINTEXT, by explicit decision, not hashed and not encrypted:
+  //
+  //  - A hash (the way `Staff.passwordHash` works) can verify but never be read
+  //    back, which would defeat the whole point: the register is where the
+  //    password of any laptop is known at any time.
+  //  - Encryption was tried first and removed again. It needs a key held outside
+  //    the database, and that key becomes a second thing to back up, keep in
+  //    sync across environments, and never lose — losing it loses every stored
+  //    password at once. The deployment opted for visibility in `psql` and
+  //    Studio over that operational burden.
+  //
+  // The consequence to understand: anyone who can read the database (a `pg_dump`,
+  // a backup, a read-only SQL account) can read every device password at once.
+  // The compensating controls are the ones around the database itself — and
+  // inside the app:
+  //   - the column never leaves the server in any list or detail DTO and is
+  //     excluded from the public tag endpoint;
+  //   - it is readable only through `services/asset-passwords.ts`, gated on
+  //     `asset:manage` (ADMIN and up);
+  //   - every read and write writes an audit row, so "who looked at this
+  //     password" is answerable even though the data itself is not encrypted.
+  //
+  // NULL on every asset nobody has set a password for, which is the normal state:
+  // most assets in this app are monitors and docks, and only the ones that boot
+  // need a password at all.
+  password String?
+  // When it was last set, and by whom. Recorded because "this laptop's password
+  // has been wrong since March" is only answerable if the date survived — the
+  // value itself gives no clue about its own age.
+  passwordSetAt DateTime?
+  // From the session, never from client input, so the attribution cannot be
+  // forged. `onDelete: SetNull`: removing an account must not destroy the one
+  // asset record that still knows a laptop's password.
+  passwordSetById String?
+  passwordSetBy   Staff?  @relation("AssetPasswordSetBy", fields: [passwordSetById], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -87,6 +145,7 @@ model Asset {
   @@index([serialNumber])
   @@index([status])
   @@index([brand])
+  @@index([archivedAt])
 }
 
 model Department {
@@ -130,6 +189,11 @@ model Staff {
   returnedAssignments Assignment[] @relation("AssignmentReturnedBy")
   resetTokens PasswordResetToken[]
   auditLogs   AuditLog[]
+  // Assets this person archived. `onDelete: SetNull` on the asset side, so
+  // removing the account leaves the archived row standing with no attribution.
+  archivedAssets Asset[] @relation("AssetArchivedBy")
+  // Device passwords this person set or regenerated.
+  passwordsSet Asset[] @relation("AssetPasswordSetBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

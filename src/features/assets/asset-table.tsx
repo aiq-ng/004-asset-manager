@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { statusPresentation } from "@/features/assets/asset-status";
 import { AssetRowActions } from "@/features/assets/asset-row-actions";
+import { AssetPasswordCell } from "@/features/assets/asset-password-cell";
 import {
   AssetSelectAllCheckbox,
   AssetSelectCheckbox,
@@ -32,6 +33,8 @@ export interface AssetListItem {
   serialNumber: string | null;
   assetType: { id: string; name: string; code: string };
   assignedTo: { id: string; name: string; department: string } | null;
+  /** Whether a device password is stored. Never the value itself. */
+  hasDevicePassword: boolean;
   createdAt: string;
 }
 
@@ -68,6 +71,11 @@ export function AssetTable({
               <TableHeader className="w-36">Serial No.</TableHeader>
               <TableHeader className="w-36">Status</TableHeader>
               <TableHeader className="w-48">Assigned to</TableHeader>
+              {/* Only ever rendered for ADMIN and up: the column is the one place
+                  on a list page where a credential is a single click from the
+                  screen, so the header follows the same `asset:manage` gate as
+                  the cell it labels. */}
+              {canManage ? <TableHeader className="w-56">Password</TableHeader> : null}
               <TableHeader className="w-32">Added</TableHeader>
               <TableHeader className="w-12">
                 <span className="sr-only">Actions</span>
@@ -108,6 +116,17 @@ export function AssetTable({
                     <span className="text-c54-text-muted">—</span>
                   )}
                 </TableCell>
+                {/* Whole cell and whole header are both behind the gate, not just
+                    the contents: an empty cell under a header nobody may use is a
+                    column of blank space on the register for every non-admin. */}
+                {canManage ? (
+                  <TableCell>
+                    <AssetPasswordCell
+                      assetId={asset.assetId}
+                      hasPassword={asset.hasDevicePassword}
+                    />
+                  </TableCell>
+                ) : null}
                 <TableCell className="text-c54-2xs text-c54-text-muted">
                   {formatRelative(asset.createdAt, now)}
                 </TableCell>
@@ -150,6 +169,18 @@ export function AssetTable({
                   : ""}
                 {asset.assignedTo ? ` · ${asset.assignedTo.name}` : ""}
               </p>
+              {/* On a phone the desktop column is gone, and the row menu is the
+                  only other place an admin can reach a credential — but the
+                  password is the thing people scan the register *for*, so it
+                  rides along under the asset rather than behind a menu. */}
+              {canManage ? (
+                <div className="mt-c54-2">
+                  <AssetPasswordCell
+                    assetId={asset.assetId}
+                    hasPassword={asset.hasDevicePassword}
+                  />
+                </div>
+              ) : null}
             </div>
             <AssetRowActions
               assetId={asset.assetId}
@@ -165,6 +196,43 @@ export function AssetTable({
       </ul>
     </>
   );
+}
+
+/**
+ * Narrows a full `AssetDto` to what a register row actually renders.
+ *
+ * The row needs one fact about the device password — whether one is stored — and
+ * never the value, which lives only behind `services/asset-passwords.ts`. Mapping
+ * rather than casting: the previous `items as AssetListItem[]` was a promise that
+ * the service DTO and the row shape had not drifted, made without any check, and
+ * this is the line that breaks if one of them does.
+ */
+export function toAssetListItem(asset: {
+  id: string;
+  assetId: string;
+  description: string;
+  brand: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  status: string;
+  assetType: { id: string; name: string; code: string };
+  assignedTo: { id: string; name: string; department: string } | null;
+  devicePassword: { setAt: string; setBy: string | null } | null;
+  createdAt: string;
+}): AssetListItem {
+  return {
+    id: asset.id,
+    assetId: asset.assetId,
+    description: asset.description,
+    brand: asset.brand,
+    model: asset.model,
+    serialNumber: asset.serialNumber,
+    status: asset.status,
+    assetType: asset.assetType,
+    assignedTo: asset.assignedTo,
+    hasDevicePassword: asset.devicePassword !== null,
+    createdAt: asset.createdAt,
+  };
 }
 
 export function StatusBadge({ status, size = "md" }: { status: string; size?: "sm" | "md" }) {

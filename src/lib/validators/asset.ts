@@ -7,6 +7,10 @@ import {
   optionalTrimmedString,
   paginationSchema,
 } from "@/lib/validators/common";
+import {
+  MAX_DEVICE_PASSWORD_LENGTH,
+  MIN_DEVICE_PASSWORD_LENGTH,
+} from "@/lib/auth/device-password-policy";
 
 export const listAssetsQuerySchema = paginationSchema.extend({
   q: z
@@ -178,8 +182,59 @@ export const assetIdParamSchema = z.object({
   id: assetIdentifierSchema,
 });
 
+/**
+ * The "set it myself" device password.
+ *
+ * The length bounds come from `device-password-policy` rather than from the staff
+ * password policy: the generated `LAP-K7QM-3XB4` format has to clear this check,
+ * and a credential somebody is reading off a screen to type at a desk is not the
+ * same threat model as an account password.
+ *
+ * `.trim()` before the length check, matching the service: a password that is
+ * only spaces is stored as NULL, and refusing it here with a field error is
+ * clearer than a 422 about an empty column.
+ */
+export const setDevicePasswordSchema = z.object({
+  assetId: z.string().trim().min(1, "assetId is required").max(64),
+  password: z
+    .string()
+    .trim()
+    .min(
+      MIN_DEVICE_PASSWORD_LENGTH,
+      `password must be at least ${MIN_DEVICE_PASSWORD_LENGTH} characters`,
+    )
+    .max(
+      MAX_DEVICE_PASSWORD_LENGTH,
+      `password must be at most ${MAX_DEVICE_PASSWORD_LENGTH} characters`,
+    ),
+});
+
+/** The asset a device-password operation addresses. */
+export const devicePasswordRefSchema = z.object({
+  assetId: z.string().trim().min(1, "assetId is required").max(64),
+});
+
+/**
+ * The archive list: a search box and pagination, nothing else.
+ *
+ * The archive is a record of what was taken off the register and why it was
+ * created, so the only filters that mean anything here are "which record" and
+ * "when". Status, type and holder would all describe a row that no longer takes
+ * part in circulation.
+ */
+export const listArchivedAssetsQuerySchema = paginationSchema.extend({
+  q: z
+    .string()
+    .trim()
+    .min(1, "q must not be empty")
+    .max(120, "q must be <= 120 characters")
+    .optional(),
+});
+
 export type ListAssetsQuery = z.infer<typeof listAssetsQuerySchema>;
+export type ListArchivedAssetsQuery = z.infer<typeof listArchivedAssetsQuerySchema>;
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 export type BulkAssetSubmitInput = z.infer<typeof bulkAssetSubmitSchema>;
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
 export type UpdateAssetStatusInput = z.infer<typeof updateAssetStatusSchema>;
+export type SetDevicePasswordInput = z.infer<typeof setDevicePasswordSchema>;

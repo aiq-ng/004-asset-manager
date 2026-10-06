@@ -16,7 +16,9 @@ import {
 import { StatusBadge } from "@/features/assets/asset-table";
 import { AssetEditForm } from "@/features/assets/asset-edit-form";
 import { AssetImageManager } from "@/features/assets/asset-image-manager";
+import { AssetPasswordPanel } from "@/features/assets/asset-password-panel";
 import { AssetRetireControl } from "@/features/assets/asset-retire-control";
+import { AssetArchiveControl } from "@/features/assets/asset-archive-control";
 import { AssignmentHistory, AssignmentPanel } from "@/features/assets/assignment-panel";
 import { getAsset, signStorageUrl } from "@/lib/services/assets";
 import { listStaffOptions } from "@/lib/services/staff";
@@ -217,6 +219,13 @@ export async function AssetDetailView({
             />
           ) : null}
 
+          {/* Offered even on a retired asset: the question this answers is
+              whether the record itself is wrong, which retiring does not
+              decide. */}
+          {canManage ? (
+            <AssetArchiveControl assetId={asset.assetId} assigned={asset.assignedTo !== null} />
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Assignment history</CardTitle>
@@ -244,6 +253,13 @@ export async function AssetDetailView({
             imageUrl={asset.imageUrl}
             canManage={canManage}
           />
+
+          {/* ADMIN and up. The card shows only whether a password is stored, when
+              it was set and who set it; the value itself is fetched on an explicit
+              click, so it is not sitting in this page's server-rendered payload. */}
+          {canManage ? (
+            <AssetPasswordPanel assetId={asset.assetId} status={asset.devicePassword} />
+          ) : null}
 
           <Card>
             <CardHeader>
