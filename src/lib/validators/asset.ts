@@ -11,6 +11,7 @@ import {
   MAX_DEVICE_PASSWORD_LENGTH,
   MIN_DEVICE_PASSWORD_LENGTH,
 } from "@/lib/auth/device-password-policy";
+import { DEVICE_PIN_LENGTH, DEVICE_PIN_PATTERN } from "@/lib/auth/device-pin-policy";
 
 export const listAssetsQuerySchema = paginationSchema.extend({
   q: z
@@ -215,6 +216,32 @@ export const devicePasswordRefSchema = z.object({
 });
 
 /**
+ * The "set it myself" device PIN.
+ *
+ * Length bounds *and* a digits-only pattern, not one or the other: a PIN is a
+ * format, not a strength floor, so `12345` has to be refused for being the
+ * wrong length and `12ab` for being the wrong alphabet — the two failure modes
+ * an operator will actually hit at a keypad.
+ *
+ * `.trim()` before the checks, matching the service, so ` 1234 ` is accepted as
+ * `1234` rather than rejected for its whitespace.
+ */
+export const setDevicePinSchema = z.object({
+  assetId: z.string().trim().min(1, "assetId is required").max(64),
+  pin: z
+    .string()
+    .trim()
+    .min(DEVICE_PIN_LENGTH, `pin must be exactly ${DEVICE_PIN_LENGTH} digits`)
+    .max(DEVICE_PIN_LENGTH, `pin must be exactly ${DEVICE_PIN_LENGTH} digits`)
+    .regex(DEVICE_PIN_PATTERN, "pin must contain digits only"),
+});
+
+/** The asset a device-PIN operation addresses. */
+export const devicePinRefSchema = z.object({
+  assetId: z.string().trim().min(1, "assetId is required").max(64),
+});
+
+/**
  * The archive list: a search box and pagination, nothing else.
  *
  * The archive is a record of what was taken off the register and why it was
@@ -238,3 +265,4 @@ export type BulkAssetSubmitInput = z.infer<typeof bulkAssetSubmitSchema>;
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
 export type UpdateAssetStatusInput = z.infer<typeof updateAssetStatusSchema>;
 export type SetDevicePasswordInput = z.infer<typeof setDevicePasswordSchema>;
+export type SetDevicePinInput = z.infer<typeof setDevicePinSchema>;

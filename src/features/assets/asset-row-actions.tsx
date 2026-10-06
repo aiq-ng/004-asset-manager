@@ -96,7 +96,10 @@ export function AssetRowActions({
           <>
             <DropdownSeparator />
             <DropdownItem onClick={() => setRepairOpen(true)}>
-              <Wrench />
+              {/* Sized like every other icon in this menu: `DropdownItem` does
+                  not size its children, so a bare `<Wrench />` rendered at
+                  lucide's default 24px against 14px neighbours. */}
+              <Wrench className="size-3.5" />
               {isRepairing ? "Mark available" : "Send for repair"}
             </DropdownItem>
           </>

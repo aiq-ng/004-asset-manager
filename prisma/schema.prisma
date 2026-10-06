@@ -27,11 +27,12 @@
 // - `Staff.sessionVersion` makes stateless session cookies revocable: it is
 //   embedded in the cookie and checked on every request, so signing out or
 //   resetting a password invalidates tokens that were already handed out.
-// - `Asset.password` holds the device password — the app's only *reversible*
-//   secret, deliberately in plaintext (see the field comment below for why, and
-//   for what that costs). It is written and read only through
-//   src/lib/services/asset-passwords.ts; before adding it to a query, a DTO or
-//   an export, read that file's header first.
+// - `Asset.password` and `Asset.pin` hold the device credentials — the app's only
+//   *reversible* secrets, deliberately in plaintext (see the field comments below
+//   for why, and for what that costs). They are written and read only through
+//   src/lib/services/asset-passwords.ts and src/lib/services/asset-pins.ts;
+//   before adding either to a query, a DTO or an export, read those files'
+//   headers first.
 
 generator client {
   provider = "prisma-client"
@@ -138,6 +139,28 @@ model Asset {
   passwordSetById String?
   passwordSetBy   Staff?  @relation("AssetPasswordSetBy", fields: [passwordSetById], references: [id], onDelete: SetNull)
 
+  // Device PIN: the short numeric code a device is unlocked with, kept alongside
+  // the password because they are two halves of the same question — "how do I
+  // get into this thing" — and a register that knows one and not the other has
+  // only half the answer.
+  //
+  // Same storage decision as `password`, and for the same reasons: a 4-digit PIN
+  // cannot be meaningfully hashed into anything an attacker could not walk
+  // through, and the whole point of the column is that an admin reads it back.
+  // The same compensating controls apply — never in any DTO, readable only
+  // through `services/asset-pins.ts` behind `asset:manage`, every read and write
+  // audited with the value kept out of the trail.
+  //
+  // NULL on every asset nobody has recorded a PIN for, which is most of them.
+  pin String?
+  // Provenance, exactly as for `password`: when it was set and by whom, so
+  // "this code has not changed since March" survives.
+  pinSetAt   DateTime?
+  // From the session, never from client input. `onDelete: SetNull` for the same
+  // reason: a deleted account must not take the PIN with it.
+  pinSetById String?
+  pinSetBy   Staff?  @relation("AssetPinSetBy", fields: [pinSetById], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -194,6 +217,8 @@ model Staff {
   archivedAssets Asset[] @relation("AssetArchivedBy")
   // Device passwords this person set or regenerated.
   passwordsSet Asset[] @relation("AssetPasswordSetBy")
+  // Device PINs this person set or regenerated.
+  pinsSet      Asset[] @relation("AssetPinSetBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

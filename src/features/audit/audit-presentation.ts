@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Eye, Grid2x2, Image, Info, KeyRound, LockKeyhole, LogIn, LogOut, Pencil, ShieldCheck, Trash, Trash2, Upload, UserPlus } from "lucide-react";
+import { Archive, ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Eye, Grid2x2, Hash, Image, Info, KeyRound, LockKeyhole, LogIn, LogOut, Pencil, ShieldCheck, Trash, Trash2, Upload, UserPlus } from "lucide-react";
 
 import type { BadgeIcon, BadgeTone } from "@/components/ui/badge";
 
@@ -41,6 +41,11 @@ const ACTIONS: Record<string, ActionPresentation> = {
   ASSET_PASSWORD_SET: { label: "Device password set", group: "security", tone: "warning", icon: KeyRound },
   ASSET_PASSWORD_REVEALED: { label: "Device password read", group: "security", tone: "warning", icon: Eye },
   ASSET_PASSWORD_CLEARED: { label: "Device password cleared", group: "security", tone: "neutral", icon: Trash2 },
+
+  // Device PINs, in the same group and for the same reason as the passwords.
+  ASSET_PIN_SET: { label: "Device PIN set", group: "security", tone: "warning", icon: Hash },
+  ASSET_PIN_REVEALED: { label: "Device PIN read", group: "security", tone: "warning", icon: Eye },
+  ASSET_PIN_CLEARED: { label: "Device PIN cleared", group: "security", tone: "neutral", icon: Trash2 },
 
   ASSET_TYPE_CREATED: { label: "Type created", group: "asset", tone: "success", icon: Grid2x2 },
   ASSET_TYPE_UPDATED: { label: "Type updated", group: "asset", tone: "info", icon: Pencil },
