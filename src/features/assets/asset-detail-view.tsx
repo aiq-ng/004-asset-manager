@@ -17,6 +17,7 @@ import { StatusBadge } from "@/features/assets/asset-table";
 import { AssetEditForm } from "@/features/assets/asset-edit-form";
 import { AssetImageManager } from "@/features/assets/asset-image-manager";
 import { AssetPasswordPanel } from "@/features/assets/asset-password-panel";
+import { AssetPinPanel } from "@/features/assets/asset-pin-panel";
 import { AssetRetireControl } from "@/features/assets/asset-retire-control";
 import { AssetArchiveControl } from "@/features/assets/asset-archive-control";
 import { AssignmentHistory, AssignmentPanel } from "@/features/assets/assignment-panel";
@@ -254,11 +255,16 @@ export async function AssetDetailView({
             canManage={canManage}
           />
 
-          {/* ADMIN and up. The card shows only whether a password is stored, when
-              it was set and who set it; the value itself is fetched on an explicit
-              click, so it is not sitting in this page's server-rendered payload. */}
+          {/* ADMIN and up. Both cards show only whether a credential is stored,
+              when it was set and who set it; the value itself is fetched on an
+              explicit click, so it is not sitting in this page's server-rendered
+              payload. */}
           {canManage ? (
             <AssetPasswordPanel assetId={asset.assetId} status={asset.devicePassword} />
+          ) : null}
+
+          {canManage ? (
+            <AssetPinPanel assetId={asset.assetId} status={asset.devicePin} />
           ) : null}
 
           <Card>

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { statusPresentation } from "@/features/assets/asset-status";
 import { AssetRowActions } from "@/features/assets/asset-row-actions";
 import { AssetPasswordCell } from "@/features/assets/asset-password-cell";
+import { AssetPinCell } from "@/features/assets/asset-pin-cell";
 import {
   AssetSelectAllCheckbox,
   AssetSelectCheckbox,
@@ -35,6 +36,8 @@ export interface AssetListItem {
   assignedTo: { id: string; name: string; department: string } | null;
   /** Whether a device password is stored. Never the value itself. */
   hasDevicePassword: boolean;
+  /** Whether a device PIN is stored. Never the value itself. */
+  hasDevicePin: boolean;
   createdAt: string;
 }
 
@@ -71,11 +74,12 @@ export function AssetTable({
               <TableHeader className="w-36">Serial No.</TableHeader>
               <TableHeader className="w-36">Status</TableHeader>
               <TableHeader className="w-48">Assigned to</TableHeader>
-              {/* Only ever rendered for ADMIN and up: the column is the one place
-                  on a list page where a credential is a single click from the
-                  screen, so the header follows the same `asset:manage` gate as
-                  the cell it labels. */}
+              {/* Only ever rendered for ADMIN and up: the columns are the one
+                  place on a list page where a credential is a single click from
+                  the screen, so the headers follow the same `asset:manage` gate
+                  as the cells they label. */}
               {canManage ? <TableHeader className="w-56">Password</TableHeader> : null}
+              {canManage ? <TableHeader className="w-36">PIN</TableHeader> : null}
               <TableHeader className="w-32">Added</TableHeader>
               <TableHeader className="w-12">
                 <span className="sr-only">Actions</span>
@@ -104,8 +108,13 @@ export function AssetTable({
                 <TableCell className="text-c54-xs text-c54-text-secondary">
                   <span className="block truncate">{asset.model ?? "—"}</span>
                 </TableCell>
+                {/* Type before Serial, matching the headers above: the widths are
+                    sized for it (`Type` short, `Serial No.` wider), and swapping
+                    the cells put every serial under a "Type" label. */}
+                <TableCell className="text-c54-xs text-c54-text-secondary">
+                  {asset.assetType.name}
+                </TableCell>
                 <TableCell>{asset.serialNumber ?? "—"}</TableCell>
-                <TableCell className="text-c54-xs text-c54-text-secondary">{asset.assetType.name}</TableCell>
                 <TableCell>
                   <StatusBadge status={asset.status} />
                 </TableCell>
@@ -125,6 +134,11 @@ export function AssetTable({
                       assetId={asset.assetId}
                       hasPassword={asset.hasDevicePassword}
                     />
+                  </TableCell>
+                ) : null}
+                {canManage ? (
+                  <TableCell>
+                    <AssetPinCell assetId={asset.assetId} hasPin={asset.hasDevicePin} />
                   </TableCell>
                 ) : null}
                 <TableCell className="text-c54-2xs text-c54-text-muted">
@@ -169,16 +183,25 @@ export function AssetTable({
                   : ""}
                 {asset.assignedTo ? ` · ${asset.assignedTo.name}` : ""}
               </p>
-              {/* On a phone the desktop column is gone, and the row menu is the
+              {/* On a phone the desktop columns are gone, and the row menu is the
                   only other place an admin can reach a credential — but the
-                  password is the thing people scan the register *for*, so it
-                  rides along under the asset rather than behind a menu. */}
+                  password and the PIN are the things people scan the register
+                  *for*, so they ride along under the asset rather than behind a
+                  menu. Labelled because there are two of them now, and two rows
+                  of four-to-eight dots with no caption are indistinguishable. */}
               {canManage ? (
-                <div className="mt-c54-2">
-                  <AssetPasswordCell
-                    assetId={asset.assetId}
-                    hasPassword={asset.hasDevicePassword}
-                  />
+                <div className="mt-c54-2 flex flex-wrap gap-x-c54-4 gap-y-c54-2">
+                  <div className="min-w-0">
+                    <span className="block text-c54-2xs text-c54-text-muted">Password</span>
+                    <AssetPasswordCell
+                      assetId={asset.assetId}
+                      hasPassword={asset.hasDevicePassword}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block text-c54-2xs text-c54-text-muted">PIN</span>
+                    <AssetPinCell assetId={asset.assetId} hasPin={asset.hasDevicePin} />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -201,11 +224,12 @@ export function AssetTable({
 /**
  * Narrows a full `AssetDto` to what a register row actually renders.
  *
- * The row needs one fact about the device password — whether one is stored — and
- * never the value, which lives only behind `services/asset-passwords.ts`. Mapping
- * rather than casting: the previous `items as AssetListItem[]` was a promise that
- * the service DTO and the row shape had not drifted, made without any check, and
- * this is the line that breaks if one of them does.
+ * The row needs one fact about each device credential — whether it is stored —
+ * and never either value, which live only behind `services/asset-passwords.ts`
+ * and `services/asset-pins.ts`. Mapping rather than casting: the previous
+ * `items as AssetListItem[]` was a promise that the service DTO and the row
+ * shape had not drifted, made without any check, and this is the line that breaks
+ * if one of them does.
  */
 export function toAssetListItem(asset: {
   id: string;
@@ -218,6 +242,7 @@ export function toAssetListItem(asset: {
   assetType: { id: string; name: string; code: string };
   assignedTo: { id: string; name: string; department: string } | null;
   devicePassword: { setAt: string; setBy: string | null } | null;
+  devicePin: { setAt: string; setBy: string | null } | null;
   createdAt: string;
 }): AssetListItem {
   return {
@@ -231,6 +256,7 @@ export function toAssetListItem(asset: {
     assetType: asset.assetType,
     assignedTo: asset.assignedTo,
     hasDevicePassword: asset.devicePassword !== null,
+    hasDevicePin: asset.devicePin !== null,
     createdAt: asset.createdAt,
   };
 }

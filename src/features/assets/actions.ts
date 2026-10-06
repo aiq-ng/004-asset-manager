@@ -21,6 +21,12 @@ import {
   revealDevicePassword,
   setDevicePassword,
 } from "@/lib/services/asset-passwords";
+import {
+  clearDevicePin,
+  generateAndSetDevicePin,
+  revealDevicePin,
+  setDevicePin,
+} from "@/lib/services/asset-pins";
 import { REGISTERED_PROMPT_PARAM } from "@/features/assets/registered-prompt-param";
 import { parseUploadedImage } from "@/lib/services/images";
 import type { AssetDto } from "@/lib/services/serializers";
@@ -29,7 +35,9 @@ import {
   bulkAssetSubmitSchema,
   createAssetSchema,
   devicePasswordRefSchema,
+  devicePinRefSchema,
   setDevicePasswordSchema,
+  setDevicePinSchema,
   updateAssetSchema,
   updateAssetStatusSchema,
 } from "@/lib/validators/asset";
@@ -360,6 +368,77 @@ export const clearDevicePasswordAction = defineAction(
     route: "action:clearDevicePassword",
     permission: "asset:manage",
     successMessage: "Device password cleared.",
+  },
+);
+
+/**
+ * Stores a device PIN somebody typed themselves.
+ *
+ * `asset:manage`, i.e. ADMIN and up — the same authority as the password, and
+ * for the same reason: reading the code that opens any device in the building is
+ * the same power as editing the record that describes it.
+ *
+ * Returns the trimmed PIN alongside the status metadata — the service does the
+ * trimming and echoes exactly what it stored, so the form can show what is now
+ * on the device without a second, separately-audited reveal round trip. The same
+ * `{ pin, status }` contract as the generate action, which is what lets the
+ * credentials card adopt either result with one piece of code.
+ */
+export const setDevicePinAction = defineAction(
+  setDevicePinSchema,
+  ({ assetId, pin }, actor) => setDevicePin(assetId, pin, actor),
+  {
+    route: "action:setDevicePin",
+    permission: "asset:manage",
+    successMessage: "Device PIN saved.",
+  },
+);
+
+/**
+ * Generates a new device PIN, stores it, and returns it once.
+ *
+ * The plaintext comes back in `data` because that is the only moment the caller
+ * can learn it without a second read — which would also write a second
+ * "revealed" audit row and make a routine regeneration look like somebody went
+ * looking through the credentials. The service audits the set; this path
+ * deliberately does not also audit a reveal.
+ */
+export const generateDevicePinAction = defineAction(
+  devicePinRefSchema,
+  ({ assetId }, actor) => generateAndSetDevicePin(assetId, actor),
+  {
+    route: "action:generateDevicePin",
+    permission: "asset:manage",
+    successMessage: "Device PIN generated.",
+  },
+);
+
+/**
+ * Reads a stored device PIN back.
+ *
+ * `revalidate: false` because nothing on the page changed: a reveal returns a
+ * value, it does not mutate the asset. Refreshing anyway would re-run the whole
+ * route and replace the PIN the operator is reading with the masked form.
+ */
+export const revealDevicePinAction = defineAction(
+  devicePinRefSchema,
+  ({ assetId }) => revealDevicePin(assetId),
+  {
+    route: "action:revealDevicePin",
+    permission: "asset:manage",
+    successMessage: "PIN revealed.",
+    revalidate: false,
+  },
+);
+
+/** Clears a stored device PIN, for a device that no longer uses it. */
+export const clearDevicePinAction = defineAction(
+  devicePinRefSchema,
+  ({ assetId }) => clearDevicePin(assetId),
+  {
+    route: "action:clearDevicePin",
+    permission: "asset:manage",
+    successMessage: "Device PIN cleared.",
   },
 );
 

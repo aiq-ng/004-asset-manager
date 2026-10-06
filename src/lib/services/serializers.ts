@@ -12,10 +12,11 @@ export const staffSelect = {
 /** Relations loaded whenever an asset is returned to a client. */
 export const assetInclude = {
   assetType: { select: { id: true, name: true, code: true } },
-  // Provenance for the stored device password, so the register and the detail
-  // page can say who set it without a second query per row. The name only —
-  // never the ciphertext, which has no place in a DTO.
+  // Provenance for the stored device password and PIN, so the register and the
+  // detail page can say who set them without a second query per row. The name
+  // only — never the values, which have no place in a DTO.
   passwordSetBy: { select: { name: true } },
+  pinSetBy: { select: { name: true } },
   assignments: {
     where: { dateReturned: null },
     orderBy: { dateAssigned: "desc" },
@@ -125,16 +126,22 @@ export interface AssetDto {
    * Whether a device password is stored, and where it came from — never the
    * password itself.
    *
-   * `AssetRecord` selects the asset row whole, so the encrypted ciphertext rides
-   * along with every list and detail read. It stops here: `AssetDto` carries only
-   * the two metadata fields, and the value is reachable through exactly one
-   * function in `services/asset-passwords.ts`. Do not add it to this interface to
-   * save a round trip — see the note on `password` in the schema.
+   * `AssetRecord` selects the asset row whole, so the plaintext rides along with
+   * every list and detail read. It stops here: `AssetDto` carries only the two
+   * metadata fields, and the value is reachable through exactly one function in
+   * `services/asset-passwords.ts`. Do not add it to this interface to save a
+   * round trip — see the note on `password` in the schema.
    *
    * Safe to show to any reader of an asset: it says a password exists, not what
    * it is.
    */
   devicePassword: { setAt: string; setBy: string | null } | null;
+  /**
+   * The PIN's half of the same contract: presence and provenance, never the
+   * value. Same boundary as `devicePassword`, enforced by
+   * `services/asset-pins.ts`.
+   */
+  devicePin: { setAt: string; setBy: string | null } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -196,11 +203,14 @@ function toAssetBase(asset: AssetRow, imageUrl: string | null): AssetDto {
     assetType: asset.assetType,
     assignedTo: active ? toStaffDto(active.staff) : null,
     assignment: active ? toAssignmentDto(active) : null,
-    // Presence and provenance only. `password` is on `asset` right now and is
-    // deliberately not read: this is the boundary the whole credential design
-    // rests on.
+    // Presence and provenance only. `password` and `pin` are on `asset` right
+    // now and are deliberately not read: this is the boundary the whole
+    // credential design rests on.
     devicePassword: asset.passwordSetAt
       ? { setAt: asset.passwordSetAt.toISOString(), setBy: asset.passwordSetBy?.name ?? null }
+      : null,
+    devicePin: asset.pinSetAt
+      ? { setAt: asset.pinSetAt.toISOString(), setBy: asset.pinSetBy?.name ?? null }
       : null,
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString(),

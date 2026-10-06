@@ -32,6 +32,14 @@ export const AUDIT_ACTIONS = {
   ASSET_PASSWORD_REVEALED: "ASSET_PASSWORD_REVEALED",
   ASSET_PASSWORD_CLEARED: "ASSET_PASSWORD_CLEARED",
 
+  // Device PINs, for the same three reasons as the passwords above. Separate
+  // actions rather than `ASSET_PASSWORD_*` with a `kind` in the metadata: the
+  // audit screen filters by action, and "someone read a PIN" and "someone read
+  // a password" are two different rows an investigation asks for.
+  ASSET_PIN_SET: "ASSET_PIN_SET",
+  ASSET_PIN_REVEALED: "ASSET_PIN_REVEALED",
+  ASSET_PIN_CLEARED: "ASSET_PIN_CLEARED",
+
   ASSET_TYPE_CREATED: "ASSET_TYPE_CREATED",
   ASSET_TYPE_UPDATED: "ASSET_TYPE_UPDATED",
 
@@ -111,6 +119,11 @@ const REDACTED_KEYS = new Set([
   // have to remember this module exists.
   "devicepassword",
   "passwordciphertext",
+  // The device PIN, for the same reason: the value is never passed today, but a
+  // caller who did would be one absent guard away from writing a working code
+  // into an append-only log.
+  "pin",
+  "devicepin",
   "token",
   "sessiontoken",
   "authorization",

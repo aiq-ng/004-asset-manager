@@ -63,8 +63,14 @@ export function toFieldErrors(error: z.ZodError): Record<string, string> {
  * the page — for a form that is supposed to be holding nothing but a name and an
  * address. Matching on the name rather than listing fields means a new
  * `confirmNewPassword` is covered by the same rule as the one it confirms.
+ *
+ * `pin` is in here for the device PIN, which is a working credential and not a
+ * hint. Without it a failed submit would echo the typed code back into
+ * `state.values`, i.e. into the action's response body. Matching it bluntly is
+ * safe: no field in this app is named anything containing "pin" other than the
+ * credential itself.
  */
-const SECRET_KEY = /pass|secret|token|credential/i;
+const SECRET_KEY = /pass|secret|token|credential|pin/i;
 
 /**
  * The string entries of a submission, for echoing back into a failed form.

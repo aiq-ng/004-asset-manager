@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useId, useState } from "react";
-import { Check, Copy, Dices, Eye, EyeOff, KeyRound, Trash2 } from "lucide-react";
+import { Check, Copy, Dices, Eye, EyeOff, Hash, Trash2 } from "lucide-react";
 
 import {
-  clearDevicePasswordAction,
-  generateDevicePasswordAction,
-  revealDevicePasswordAction,
-  setDevicePasswordAction,
+  clearDevicePinAction,
+  generateDevicePinAction,
+  revealDevicePinAction,
+  setDevicePinAction,
 } from "@/features/assets/actions";
 import { ConfirmDialog, Dialog, DialogCancelButton } from "@/components/ui/dialog";
 import { Alert } from "@/components/ui/feedback";
@@ -16,35 +16,42 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/controls";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEVICE_PASSWORD_REQUIREMENT } from "@/lib/auth/device-password-policy";
+import { DEVICE_PIN_LENGTH, DEVICE_PIN_REQUIREMENT } from "@/lib/auth/device-pin-policy";
 import { INITIAL_ACTION_STATE } from "@/lib/server/action-state";
 
-/** What a masked device password renders as. Length is fixed for generated codes. */
-const MASK = "••••••••••••";
+/** What a masked device PIN renders as. Length matches `DEVICE_PIN_LENGTH`. */
+const MASK = "•".repeat(DEVICE_PIN_LENGTH);
 
 /**
- * The device credentials card on an asset's own page.
+ * The device PIN card on an asset's own page.
  *
- * A client island because the whole point is a secret: it appears only on an
+ * The counterpart to `asset-password-panel.tsx`, and deliberately the same shape
+ * of client island: the whole point is a secret, so the value appears only on an
  * explicit click, lives in component state rather than in the server-rendered
  * props, and is dropped the moment the card is dismissed. The server sends down
- * `status` — whether a password exists, when it was set and who set it — and
- * nothing else; the value comes back from the reveal action on demand.
+ * `status` — whether a PIN exists, when it was set and who set it — and nothing
+ * else; the value comes back from the reveal action on demand.
+ *
+ * It is a separate card rather than a second block inside the password one
+ * because the two are independent credentials: either can be set, regenerated or
+ * forgotten without touching the other, and one card with two halves would have
+ * two sets of pending flags, two masks and two "cleared" states fighting over one
+ * layout.
  *
  * Only rendered for ADMIN and up. The page decides that from `asset:manage`, and
  * the actions re-check it, so hiding the card is a convenience rather than the
  * control.
  */
-export function AssetPasswordPanel({
+export function AssetPinPanel({
   assetId,
   status,
 }: {
   assetId: string;
-  /** From `AssetDto.devicePassword`: presence and provenance, never the value. */
+  /** From `AssetDto.devicePin`: presence and provenance, never the value. */
   status: { setAt: string; setBy: string | null } | null;
 }) {
   // The plaintext, once something has put it here. `null` means masked, which is
-  // also the state the card reopens in — so a password cannot survive on a screen
+  // also the state the card reopens in — so a PIN cannot survive on a screen
   // somebody walked away from.
   const [revealed, setRevealed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -52,27 +59,27 @@ export function AssetPasswordPanel({
   const [manualOpen, setManualOpen] = useState(false);
 
   const [revealState, revealAction, revealPending] = useActionState(
-    revealDevicePasswordAction,
+    revealDevicePinAction,
     INITIAL_ACTION_STATE,
   );
   const [generateState, generateAction, generatePending] = useActionState(
-    generateDevicePasswordAction,
+    generateDevicePinAction,
     INITIAL_ACTION_STATE,
   );
   const [setState, setAction, setPending] = useActionState(
-    setDevicePasswordAction,
+    setDevicePinAction,
     INITIAL_ACTION_STATE,
   );
   const [clearState, clearAction, clearPending] = useActionState(
-    clearDevicePasswordAction,
+    clearDevicePinAction,
     INITIAL_ACTION_STATE,
   );
 
   // The action results this card has already acted on. Compared by identity, so
   // adoption happens on the render where a result *arrives* and never again —
   // which is what lets Hide stick: a later re-render cannot resurrect the value
-  // the user just hid, while the next explicit reveal of that same password
-  // comes back as a new result and is adopted like any other.
+  // the user just hid, while the next explicit reveal of that same PIN comes
+  // back as a new result and is adopted like any other.
   const [seen, setSeen] = useState({
     reveal: revealState,
     generate: generateState,
@@ -95,7 +102,7 @@ export function AssetPasswordPanel({
   // refresh.
   //
   // Results are marked seen even when they are passed over — because the slot is
-  // already full, say — so hiding a password later never resurrects a result that
+  // already full, say — so hiding a PIN later never resurrects a result that
   // arrived while it was showing.
   const revealChanged = seen.reveal !== revealState;
   const generateChanged = seen.generate !== generateState;
@@ -107,11 +114,11 @@ export function AssetPasswordPanel({
   if (clearState.ok) {
     if (revealed !== null) setRevealed(null);
   } else if (revealed === null) {
-    const genPw = generateState.data?.password;
-    if (generateChanged && genPw) {
-      setRevealed(genPw);
-    } else if (setChanged && setState.data?.password) {
-      setRevealed(setState.data.password);
+    const genPin = generateState.data?.pin;
+    if (generateChanged && genPin) {
+      setRevealed(genPin);
+    } else if (setChanged && setState.data?.pin) {
+      setRevealed(setState.data.pin);
     } else if (revealChanged && revealState.data) {
       setRevealed(revealState.data);
     }
@@ -129,12 +136,12 @@ export function AssetPasswordPanel({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Device credentials</CardTitle>
+          <CardTitle>Device PIN</CardTitle>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-c54-4">
           <p className="text-c54-xs leading-c54-relaxed text-c54-text-secondary">
-            The password this device is protected by, stored in plain text so an admin can read it
+            The code this device is unlocked with, stored in plain text so an admin can read it
             back at any time. Every read is recorded in the audit trail.
           </p>
 
@@ -143,7 +150,7 @@ export function AssetPasswordPanel({
           {status ? (
             <div className="rounded-c54-card border border-c54-border-default bg-c54-bg-muted/50 p-c54-3">
               <div className="flex items-center gap-c54-2 text-c54-2xs text-c54-text-muted">
-                <KeyRound aria-hidden="true" className="size-3.5" />
+                <Hash aria-hidden="true" className="size-3.5" />
                 <span>
                   Set {formatSetAt(status.setAt)}
                   {status.setBy ? ` by ${status.setBy}` : ""}
@@ -193,9 +200,9 @@ export function AssetPasswordPanel({
               </div>
             </div>
           ) : (
-            <Alert tone="info" title="No password recorded">
-              Nobody has stored a device password for this asset yet. Generate one, or record the
-              password the device was configured with.
+            <Alert tone="info" title="No PIN recorded">
+              Nobody has stored a device PIN for this asset yet. Generate one, or record the PIN
+              the device was configured with.
             </Alert>
           )}
 
@@ -212,7 +219,7 @@ export function AssetPasswordPanel({
                   disabled={busy}
                 >
                   <Dices aria-hidden="true" className="size-4" />
-                  Generate password
+                  Generate PIN
                 </SubmitButton>
               </form>
             )}
@@ -237,29 +244,29 @@ export function AssetPasswordPanel({
         </CardContent>
       </Card>
 
-      <ManualPasswordDialog
+      <ManualPinDialog
         open={manualOpen}
         onClose={() => setManualOpen(false)}
         assetId={assetId}
         state={setState}
         action={setAction}
         pending={setPending}
-        onSaved={(password) => {
+        onSaved={(pin) => {
           // Shown straight away rather than forcing a second, audited reveal
           // round trip for a value the operator is already looking at.
-          setRevealed(password);
+          setRevealed(pin);
           setManualOpen(false);
         }}
       />
 
       <ConfirmDialog
         // Closes itself once the action resolves, so a successful forget does not
-        // leave a dialog describing a password that no longer exists.
+        // leave a dialog describing a PIN that no longer exists.
         open={clearOpen && !clearState.ok}
         onClose={() => setClearOpen(false)}
-        title="Forget this device password?"
-        description={`${assetId} will stop having a stored password. The audit trail keeps the record that one was set, and who set it.`}
-        confirmLabel="Forget password"
+        title="Forget this device PIN?"
+        description={`${assetId} will stop having a stored PIN. The audit trail keeps the record that one was set, and who set it.`}
+        confirmLabel="Forget PIN"
         action={clearAction}
         fields={{ assetId }}
       >
@@ -282,15 +289,15 @@ function formatSetAt(value: string): string {
 /**
  * The "set it myself" form.
  *
- * Its own dialog rather than an inline field, because generating is the common
- * action on this card and a password box left open on the page invites somebody
- * to type the same password into two assets.
+ * Its own dialog rather than an inline field, for the same reason the password's
+ * is: generating is the common action on this card, and an open code box invites
+ * somebody to type the same PIN into two assets.
  *
  * The typed value is held in component state and never read back out of
- * `state.values`: `submittedValues` drops any field named like a secret, but a
- * value that never leaves the browser cannot end up in the RSC payload at all.
+ * `state.values` — and `submittedValues` drops any field named like a secret as
+ * well, so a failed submit cannot echo it into the response either.
  */
-function ManualPasswordDialog({
+function ManualPinDialog({
   open,
   onClose,
   assetId,
@@ -307,52 +314,46 @@ function ManualPasswordDialog({
     error: string;
     message?: string;
     fieldErrors?: Record<string, string>;
-    /** The trimmed password the action stored; present on success. */
-    data?: { password: string };
+    /** The trimmed PIN the action stored; present on success. */
+    data?: { pin: string };
   };
   action: (formData: FormData) => void;
   pending: boolean;
-  onSaved: (password: string) => void;
+  onSaved: (pin: string) => void;
 }) {
-  const [password, setPassword] = useState("");
-  const [savedPassword, setSavedPassword] = useState<string | null>(null);
+  const [pin, setPin] = useState("");
+  const [savedPin, setSavedPin] = useState<string | null>(null);
   const formId = useId();
 
   // Close on success, in render rather than in an effect. The action returns the
-  // trimmed password it stored, and this component holds the last one it has
-  // already acknowledged; a success whose value differs is the one to hand up.
-  // Comparing values rather than tracking a boolean keeps the acknowledgement
-  // correct across a second save of the same password, which a "fires once" flag
-  // would silently swallow.
-  if (state.ok && state.data && savedPassword !== state.data.password) {
-    setSavedPassword(state.data.password);
-    // The action echoes the trimmed value, so what gets displayed is what is on
-    // the device — an invisible trailing space is otherwise the reason "it says
-    // the right password and it is wrong".
-    onSaved(state.data.password);
+  // trimmed PIN it stored, and this component holds the last one it has already
+  // acknowledged; a success whose value differs is the one to hand up.
+  if (state.ok && state.data && savedPin !== state.data.pin) {
+    setSavedPin(state.data.pin);
+    onSaved(state.data.pin);
   }
-  if (!state.ok && savedPassword !== null) {
-    setSavedPassword(null);
+  if (!state.ok && savedPin !== null) {
+    setSavedPin(null);
   }
-  if (!open && password !== "") {
+  if (!open && pin !== "") {
     // Reset the typed value when the dialog is fully dismissed, so reopening it
     // does not show the previous submission as if it were still unsent.
-    setPassword("");
+    setPin("");
   }
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title="Set the device password"
-      description="Record the password this device was actually configured with."
+      title="Set the device PIN"
+      description="Record the PIN this device was actually configured with."
       size="sm"
       busy={pending}
       footer={
         <>
           <DialogCancelButton />
           <SubmitButton form={formId} pendingLabel="Saving…" pending={pending}>
-            Save password
+            Save PIN
           </SubmitButton>
         </>
       }
@@ -367,31 +368,35 @@ function ManualPasswordDialog({
         ) : null}
 
         <Field
-          label="Password"
-          htmlFor={`${formId}-password`}
-          error={state.fieldErrors?.password}
-          hint={DEVICE_PASSWORD_REQUIREMENT}
+          label="PIN"
+          htmlFor={`${formId}-pin`}
+          error={state.fieldErrors?.pin}
+          hint={DEVICE_PIN_REQUIREMENT}
           required
         >
           {(field) => (
             <Input
               {...field}
-              name="password"
+              name="pin"
               // Deliberately `text`, not `password`: the person setting this is
-              // reading it off the screen to type into a laptop, and a field
-              // that hides what they typed is a field they get wrong.
+              // reading it off the screen to type into a device, and a field
+              // that hides what they typed is a field they get wrong. The
+              // numeric keypad is what a phone shows for `inputMode="numeric"`,
+              // which is where most of these get typed.
               type="text"
+              inputMode="numeric"
               autoComplete="off"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              maxLength={DEVICE_PIN_LENGTH}
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
               className="font-c54-mono"
             />
           )}
         </Field>
 
         <p className="text-c54-2xs leading-c54-relaxed text-c54-text-muted">
-          Stored in plain text and only ever displayed to admins. Anyone can see that a password
-          exists for this asset — nobody but an admin can read it.
+          Stored in plain text and only ever displayed to admins. Anyone can see that a PIN exists
+          for this asset — nobody but an admin can read it.
         </p>
       </form>
     </Dialog>

@@ -600,6 +600,85 @@ of `generated` or `manual`, never the value), `ASSET_PASSWORD_REVEALED` (with an
 audit section for reading them.
 ---
 
+## Device PINs
+
+The short numeric code a device is unlocked with — the password's companion for
+the same question, "how do I get into this thing". Exactly four digits, stored
+and controlled the same way as the device password: plaintext in the database by
+the same deliberate trade, never in any list or detail DTO or on the public tag
+page, readable only through this ADMIN-gated endpoint, and every verb audited
+including failed reads.
+
+Whether a PIN exists, and when and by whom it was set, is on the asset's own DTO
+(`devicePin`), exactly as `devicePassword` is for the password.
+
+### `GET /api/assets/[id]/pin`
+
+*Requires: `ADMIN`.*
+
+Returns the stored plaintext, once, per call. Returns `404` when nothing is
+stored.
+
+```bash
+curl -b cookies.txt http://localhost:3000/api/assets/IT-LAP-0002/pin
+```
+
+```json
+{ "data": { "pin": "7314" } }
+```
+
+Errors: `401`, `403` (below ADMIN), `404` (asset or PIN not found).
+
+### `POST /api/assets/[id]/pin`
+
+*Requires: `ADMIN`.*
+
+Stores a PIN. Either `{ "generate": true }` — a fresh four-digit code — or
+`{ "pin": "7314" }` for one already configured on the device. Both return the
+plaintext that is now stored, so a client never needs a second, separately
+audited reveal to display what it just set.
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/api/assets/IT-LAP-0002/pin \
+  -H 'content-type: application/json' -d '{"generate":true}'
+```
+
+```json
+{
+  "data": {
+    "pin": "7314",
+    "status": { "setAt": "2026-10-06T05:38:29.283Z", "setBy": "Ana Ribeiro" }
+  }
+}
+```
+
+Errors: `400` (neither field supplied, or a PIN that is not exactly four digits),
+`404`.
+
+### `DELETE /api/assets/[id]/pin`
+
+*Requires: `ADMIN`.*
+
+Forgets a stored PIN, for a device that no longer uses it. `404` when nothing is
+stored.
+
+```bash
+curl -b cookies.txt -X DELETE http://localhost:3000/api/assets/IT-LAP-0002/pin
+```
+
+```json
+{ "data": { "cleared": true } }
+```
+
+Errors: `404`.
+
+The audit trail records three actions here, mirroring the password's:
+`ASSET_PIN_SET` (with `source` of `generated` or `manual`, never the value),
+`ASSET_PIN_REVEALED` (with an `outcome` of `revealed` or `unreadable`), and
+`ASSET_PIN_CLEARED`.
+
+---
+
 ## Images
 
 ### `POST /api/assets/[id]/image`
@@ -984,7 +1063,7 @@ falls back to zeros with `workerRunning: false` rather than the request failing.
 | Asset types | `ASSET_TYPE_CREATED`, `ASSET_TYPE_UPDATED`                                                   |
 | Staff       | `STAFF_CREATED`, `STAFF_UPDATED`, `STAFF_ROLE_CHANGED`, `STAFF_PASSWORD_RESET`, `STAFF_DELETED` |
 | Assignments | `ASSIGNMENT_CREATED`, `ASSIGNMENT_RETURNED`                                                  |
-| Security    | `AUTHORIZATION_DENIED` (a `403`, naming the account and the permission it wanted), `ASSET_PASSWORD_SET` (`source` of `generated`/`manual`), `ASSET_PASSWORD_REVEALED` (`outcome` of `revealed`/`unreadable`), `ASSET_PASSWORD_CLEARED` |
+| Security    | `AUTHORIZATION_DENIED` (a `403`, naming the account and the permission it wanted), `ASSET_PASSWORD_SET` (`source` of `generated`/`manual`), `ASSET_PASSWORD_REVEALED` (`outcome` of `revealed`/`unreadable`), `ASSET_PASSWORD_CLEARED`, and the same three for the device PIN (`ASSET_PIN_SET`, `ASSET_PIN_REVEALED`, `ASSET_PIN_CLEARED`) |
 | Departments  | `DEPARTMENT_CREATED`, `DEPARTMENT_RENAMED`, `DEPARTMENT_DELETED`                              |
 
 Guarantees and limits:
@@ -992,7 +1071,7 @@ Guarantees and limits:
 - **Append-only.** Database triggers reject `UPDATE` and `DELETE` on `"AuditLog"`; the one exception is the foreign key's `ON DELETE SET NULL` unlink, so a deleted account still leaves a readable row.
 - **Idempotent.** A replayed job upserts on `eventId` instead of inserting.
 - **Retried.** 5 attempts with exponential backoff (2s → 32s) if the worker or database is briefly unavailable.
-- **No secrets.** Passwords, tokens and secrets are replaced with `[redacted]` before an event is queued. Device-password events never carry the value at all — the password lives in an encrypted column, and the rows record only that it changed, when, and by whom.
+- **No secrets.** Passwords, PINs, tokens and secrets are replaced with `[redacted]` before an event is queued. Device-password and device-PIN events never carry the value at all — those columns are plaintext by the same deliberate trade (see the schema), and the rows record only that it changed, when, and by whom.
 - **Fail-open.** If Redis is down the API keeps working and the enqueue is bounded at 1s, after which a circuit breaker pauses auditing for 30s. Events during that window are lost — availability of the API wins over completeness of the trail.
 - **Observable.** A worker that is down does not break anything, which is what makes it easy to miss. `/audit` shows a banner with the number of queued events, and `meta.worker` above is the machine-readable form of the same signal.
 
