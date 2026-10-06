@@ -17,6 +17,7 @@ import { ApiError } from "@/lib/errors";
  *   staff:manage (accounts + roles)            SUPERADMIN only
  *   department:manage (org structure)          SUPERADMIN only
  *   audit:read (the audit trail)                SUPERADMIN only
+ *   archive:read (records archived by mistake)  ADMIN and up
  *
  * SUPERADMIN is granted exactly once, by `pnpm auth:create-superadmin`, and is
  * never assignable through the API.
@@ -29,6 +30,7 @@ export type Permission =
   | "assetType:manage"
   | "staff:manage"
   | "department:manage"
+  | "archive:read"
   | "audit:read";
 
 const RANK: Record<StaffRole, number> = {
@@ -49,6 +51,11 @@ const MINIMUM_ROLE: Record<Permission, StaffRole> = {
   // that vanishes would strand every account pointing at it. Same tier as the
   // accounts themselves.
   "department:manage": "SUPERADMIN",
+  // The archive is where a soft-deleted record goes, so it is the recovery path
+  // for a mistake: ADMIN and up, the same tier that may create and edit the
+  // records being archived (and therefore the ones most likely to have created
+  // them by mistake). Assigners and users never see it.
+  "archive:read": "ADMIN",
   "audit:read": "SUPERADMIN",
 };
 

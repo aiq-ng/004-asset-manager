@@ -1,3 +1,5 @@
+import type { Prisma } from "@/generated/prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { AUDIT_ACTIONS, diffFields } from "@/lib/audit/events";
 import { recordAudit } from "@/lib/audit/context";
@@ -13,9 +15,11 @@ import {
   type AssetRecord,
 } from "@/lib/services/serializers";
 import { reserveAssetId } from "@/lib/services/asset-id";
+import type { Actor } from "@/lib/auth/permissions";
 import type {
   BulkAssetSubmitInput,
   CreateAssetInput,
+  ListArchivedAssetsQuery,
   ListAssetsQuery,
   UpdateAssetInput,
 } from "@/lib/validators/asset";
@@ -44,6 +48,24 @@ function toAssetWhere(idOrAssetId: string): { id: string } | { assetId: string }
 }
 
 /**
+ * The same lookup, restricted to rows still on the register.
+ *
+ * Every read that addresses one asset by identifier goes through here, so an
+ * archived record answers "not found" everywhere at once — the detail page, the
+ * REST route, the assignment hand-over and the public tag. Without this the
+ * filter would have to be repeated per query, and one forgotten clause is all it
+ * takes for a record somebody meant to hide to come back on a screen.
+ */
+function toLiveAssetWhere(idOrAssetId: string) {
+  return { ...toAssetWhere(idOrAssetId), archivedAt: null };
+}
+
+/** `findFirst` rather than `findUnique`, because the filter is no longer unique. */
+function findLiveAsset(idOrAssetId: string) {
+  return prisma.asset.findFirst({ where: toLiveAssetWhere(idOrAssetId) });
+}
+
+/**
  * Translates a list query into a Prisma filter.
  *
  * Extracted so that "select all" on the register and the list itself can never
@@ -53,6 +75,10 @@ function toAssetWhere(idOrAssetId: string): { id: string } | { assetId: string }
  */
 function buildAssetWhere(query: ListAssetsQuery) {
   return {
+    // Archived rows are not on the register. Set here rather than per query so
+    // the register, the dashboard totals, the bulk "select all" and the bulk
+    // label run cannot disagree about what the register contains.
+    archivedAt: null,
     ...(query.q
       ? {
           OR: [
@@ -112,8 +138,8 @@ export async function listAssets(
 }
 
 export async function getAsset(idOrAssetId: string): Promise<AssetDetailDto> {
-  const asset = await prisma.asset.findUnique({
-    where: toAssetWhere(idOrAssetId),
+  const asset = await prisma.asset.findFirst({
+    where: toLiveAssetWhere(idOrAssetId),
     include: assetWithHistoryInclude,
   });
 
@@ -160,8 +186,8 @@ export interface PublicAssetDto {
 export async function getPublicAsset(
   idOrAssetId: string,
 ): Promise<PublicAssetDto | null> {
-  const asset = await prisma.asset.findUnique({
-    where: toAssetWhere(idOrAssetId),
+  const asset = await prisma.asset.findFirst({
+    where: toLiveAssetWhere(idOrAssetId),
     select: {
       assetId: true,
       description: true,
@@ -273,13 +299,23 @@ export async function createAssetsInBulk(
 
   const existing = await prisma.asset.findMany({
     where: { serialNumber: { in: candidates } },
-    select: { serialNumber: true },
+    select: { serialNumber: true, archivedAt: true },
   });
-  const taken = new Set(existing.map((row) => row.serialNumber));
+  const taken = new Map(existing.map((row) => [row.serialNumber, row.archivedAt]));
 
   const accepted = candidates.filter((serial) => {
-    if (!taken.has(serial)) return true;
-    skipped.push({ serial, reason: "Already on the register" });
+    const archivedAt = taken.get(serial);
+    if (archivedAt === undefined) return true;
+    skipped.push({
+      serial,
+      // An archived row keeps its serial and its unique constraint, so the
+      // check has to see it — dropping archived rows here would just move the
+      // rejection from a readable line to a failed transaction. Saying why is
+      // the useful part: the operator is not looking at the archive.
+      reason: archivedAt
+        ? "Already used by an archived record"
+        : "Already on the register",
+    });
     return false;
   });
 
@@ -421,7 +457,7 @@ export async function updateAsset(
   idOrAssetId: string,
   input: UpdateAssetInput,
 ): Promise<AssetDto> {
-  const existing = await prisma.asset.findUnique({ where: toAssetWhere(idOrAssetId) });
+  const existing = await findLiveAsset(idOrAssetId);
   if (!existing) throw ApiError.notFound(`Asset ${idOrAssetId} not found`);
 
   if (input.status && existing.status === "ASSIGNED") {
@@ -476,8 +512,8 @@ export async function updateAsset(
  * Refuses while the asset is checked out to somebody.
  */
 export async function retireAsset(idOrAssetId: string): Promise<AssetDto> {
-  const existing = await prisma.asset.findUnique({
-    where: toAssetWhere(idOrAssetId),
+  const existing = await prisma.asset.findFirst({
+    where: toLiveAssetWhere(idOrAssetId),
     include: { assignments: { where: { dateReturned: null }, take: 1 } },
   });
 
@@ -505,6 +541,206 @@ export async function retireAsset(idOrAssetId: string): Promise<AssetDto> {
   });
 
   return toAssetDto(updated, await signImage(updated.imageKey));
+}
+
+/**
+ * One record in the archive: an asset that was created by mistake and taken off
+ * the register, with enough of its row left to identify what it was.
+ *
+ * A deliberately smaller shape than `AssetDto`. None of the live-register fields
+ * mean anything for a row that is no longer in circulation, and the image is not
+ * signed here — the archive is a list of records, and a hundred presigned URLs
+ * would be a hundred signatures nobody looks at.
+ */
+export interface ArchivedAssetDto {
+  id: string;
+  assetId: string;
+  description: string;
+  brand: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  assetType: { id: string; name: string; code: string };
+  createdAt: string;
+  archivedAt: string;
+  /** Who archived it; null if that account has since been removed. */
+  archivedBy: string | null;
+}
+
+type ArchivedAssetRecord = Prisma.AssetGetPayload<{
+  select: {
+    id: true;
+    assetId: true;
+    description: true;
+    brand: true;
+    model: true;
+    serialNumber: true;
+    assetType: { select: { id: true; name: true; code: true } };
+    createdAt: true;
+    archivedAt: true;
+    archivedBy: { select: { name: true } };
+  };
+}>;
+
+function toArchivedAssetDto(row: ArchivedAssetRecord): ArchivedAssetDto {
+  return {
+    id: row.id,
+    assetId: row.assetId,
+    description: row.description,
+    brand: row.brand,
+    model: row.model,
+    serialNumber: row.serialNumber,
+    assetType: row.assetType,
+    createdAt: row.createdAt.toISOString(),
+    // Non-null by construction: the query filters on it. `!` rather than a
+    // fallback, because a null here would mean the filter and the select had
+    // drifted apart and the row should not be on this list at all.
+    archivedAt: row.archivedAt!.toISOString(),
+    archivedBy: row.archivedBy?.name ?? null,
+  };
+}
+
+/**
+ * Archives an asset: the soft delete for a record that should not exist.
+ *
+ * Distinct from `retireAsset`, which is about a real device leaving circulation
+ * and leaves the row on the register. Archiving says the record itself was a
+ * mistake — a laptop registered against the wrong type, a duplicate entered
+ * during a bulk run — so the row leaves every register read path at once.
+ *
+ * Three things it deliberately does *not* do:
+ *
+ *  - It does not touch `status`. The row keeps whatever status it had, so the
+ *    archive shows the state the mistake was made in.
+ *  - It does not rewind the asset-id counter. The id is spent for good, which is
+ *    what stops `IT-LAP-0007` from later naming a different laptop than the one
+ *    the mistake implied.
+ *  - It does not delete the row, its photo or its assignment history.
+ *
+ * Refused while the asset is checked out, for the same reason retirement is: an
+ * archived row that somebody still physically holds would leave the handover
+ * trail pointing at something the register no longer lists.
+ *
+ * `archivedById` comes from the session, never from the request body, so the
+ * attribution cannot be forged by a caller.
+ */
+export async function archiveAsset(
+  idOrAssetId: string,
+  actor: Actor,
+): Promise<ArchivedAssetDto> {
+  const existing = await prisma.asset.findFirst({
+    where: toLiveAssetWhere(idOrAssetId),
+    select: {
+      id: true,
+      assetId: true,
+      description: true,
+      brand: true,
+      model: true,
+      serialNumber: true,
+      status: true,
+      assetTypeId: true,
+      createdAt: true,
+      assignments: { where: { dateReturned: null }, take: 1, select: { id: true } },
+    },
+  });
+
+  if (!existing) throw ApiError.notFound(`Asset ${idOrAssetId} not found`);
+
+  if (existing.assignments.length > 0 || existing.status === "ASSIGNED") {
+    throw ApiError.conflict(
+      "Asset is currently assigned; return it to staff before archiving it",
+    );
+  }
+
+  try {
+    const updated = await prisma.asset.update({
+      where: { id: existing.id },
+      data: { archivedAt: new Date(), archivedById: actor.id },
+      select: {
+        id: true,
+        assetId: true,
+        description: true,
+        brand: true,
+        model: true,
+        serialNumber: true,
+        assetType: { select: { id: true, name: true, code: true } },
+        createdAt: true,
+        archivedAt: true,
+        archivedBy: { select: { name: true } },
+      },
+    });
+
+    await recordAudit({
+      action: AUDIT_ACTIONS.ASSET_ARCHIVED,
+      entityType: "ASSET",
+      entityId: updated.id,
+      summary: `Archived asset ${updated.assetId} (${updated.assetType.code})`,
+      changes: { archivedAt: { from: null, to: updated.archivedAt!.toISOString() } },
+      metadata: {
+        assetId: updated.assetId,
+        assetType: updated.assetType.code,
+        serialNumber: updated.serialNumber,
+        statusAtArchive: existing.status,
+        // The audit trail is the only place the pre-archive status survives,
+        // since the archive list itself is deliberately not a register.
+        createdAt: existing.createdAt.toISOString(),
+      },
+    });
+
+    return toArchivedAssetDto(updated);
+  } catch (error) {
+    throw fromPrismaError(error, "archive asset");
+  }
+}
+
+/**
+ * Everything currently in the archive, newest first.
+ *
+ * Ordered by when the record was archived rather than when it was created,
+ * because the question this list answers is "what was taken off the register
+ * lately", and a mistake made this morning should be at the top whatever age the
+ * asset it created was.
+ */
+export async function listArchivedAssets(
+  query: ListArchivedAssetsQuery,
+): Promise<{ items: ArchivedAssetDto[]; total: number; page: number; pageSize: number }> {
+  const where = {
+    archivedAt: { not: null },
+    ...(query.q
+      ? {
+          OR: [
+            { assetId: { contains: query.q, mode: "insensitive" as const } },
+            { serialNumber: { contains: query.q, mode: "insensitive" as const } },
+            { description: { contains: query.q, mode: "insensitive" as const } },
+            { brand: { contains: query.q, mode: "insensitive" as const } },
+            { model: { contains: query.q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.asset.findMany({
+      where,
+      select: {
+        id: true,
+        assetId: true,
+        description: true,
+        brand: true,
+        model: true,
+        serialNumber: true,
+        assetType: { select: { id: true, name: true, code: true } },
+        createdAt: true,
+        archivedAt: true,
+        archivedBy: { select: { name: true } },
+      },
+      orderBy: { archivedAt: "desc" },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    prisma.asset.count({ where }),
+  ]);
+
+  return { items: rows.map(toArchivedAssetDto), total, page: query.page, pageSize: query.pageSize };
 }
 
 /**
@@ -542,7 +778,7 @@ export async function replaceAssetImage(
   idOrAssetId: string,
   file: ParsedImage,
 ): Promise<AssetDto> {
-  const existing = await prisma.asset.findUnique({ where: toAssetWhere(idOrAssetId) });
+  const existing = await findLiveAsset(idOrAssetId);
   if (!existing) throw ApiError.notFound(`Asset ${idOrAssetId} not found`);
 
   const storage = getStorage();
@@ -587,7 +823,7 @@ export async function replaceAssetImage(
 }
 
 export async function removeAssetImage(idOrAssetId: string): Promise<AssetDto> {
-  const existing = await prisma.asset.findUnique({ where: toAssetWhere(idOrAssetId) });
+  const existing = await findLiveAsset(idOrAssetId);
   if (!existing) throw ApiError.notFound(`Asset ${idOrAssetId} not found`);
 
   if (!existing.imageKey) {
@@ -651,7 +887,7 @@ export async function listAssetsForLabels(
   if (assetIds.length === 0) return [];
 
   const rows = await prisma.asset.findMany({
-    where: { assetId: { in: assetIds } },
+    where: { assetId: { in: assetIds }, archivedAt: null },
     select: {
       assetId: true,
       serialNumber: true,
@@ -675,6 +911,13 @@ export async function listAssetsForLabels(
     typeIds.length === 0
       ? []
       : await prisma.asset.findMany({
+          // Deliberately NOT filtered on `archivedAt`, unlike every other read
+          // here. This ranking is the `UNIT` row printed on the tag, and it is
+          // computed from the rows of the type rather than stored, so dropping
+          // archived rows would renumber every laptop registered after the
+          // archived one — silently changing what a tag already glued to a
+          // device says. Archiving must not move a printed position, which is
+          // the same reason the id counter is never rewound.
           where: { assetTypeId: { in: typeIds } },
           select: { assetId: true, assetTypeId: true },
           orderBy: { assetId: "asc" },
@@ -736,13 +979,13 @@ export async function listAssetFacets(): Promise<{
 }> {
   const [brands, models] = await Promise.all([
     prisma.asset.findMany({
-      where: { brand: { not: null } },
+      where: { brand: { not: null }, archivedAt: null },
       distinct: ["brand"],
       select: { brand: true },
       orderBy: { brand: "asc" },
     }),
     prisma.asset.findMany({
-      where: { model: { not: null } },
+      where: { model: { not: null }, archivedAt: null },
       distinct: ["model", "brand"],
       select: { brand: true, model: true },
       orderBy: [{ brand: "asc" }, { model: "asc" }],

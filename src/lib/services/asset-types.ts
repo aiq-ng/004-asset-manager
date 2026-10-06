@@ -28,7 +28,10 @@ function toDto(
 
 export async function listAssetTypes(): Promise<AssetTypeDto[]> {
   const types = await prisma.assetType.findMany({
-    include: { _count: { select: { assets: true } } },
+    include: { // Archived assets are counted out: this number is "how many of this type are on
+  // the register", which is what an operator checks before renaming a code, and
+  // a record they created by mistake is not on the register.
+  _count: { select: { assets: { where: { archivedAt: null } } } } },
     orderBy: { name: "asc" },
   });
 
@@ -39,7 +42,10 @@ export async function createAssetType(input: CreateAssetTypeInput): Promise<Asse
   try {
     const created = await prisma.assetType.create({
       data: { name: input.name, code: input.code },
-      include: { _count: { select: { assets: true } } },
+      include: { // Archived assets are counted out: this number is "how many of this type are on
+  // the register", which is what an operator checks before renaming a code, and
+  // a record they created by mistake is not on the register.
+  _count: { select: { assets: { where: { archivedAt: null } } } } },
     });
 
     await recordAudit({
@@ -62,7 +68,10 @@ export async function updateAssetType(
 ): Promise<AssetTypeDto> {
   const existing = await prisma.assetType.findUnique({
     where: { id },
-    include: { _count: { select: { assets: true } } },
+    include: { // Archived assets are counted out: this number is "how many of this type are on
+  // the register", which is what an operator checks before renaming a code, and
+  // a record they created by mistake is not on the register.
+  _count: { select: { assets: { where: { archivedAt: null } } } } },
   });
 
   if (!existing) throw ApiError.notFound(`Asset type ${id} not found`);
@@ -82,7 +91,10 @@ export async function updateAssetType(
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.code !== undefined ? { code: input.code } : {}),
       },
-      include: { _count: { select: { assets: true } } },
+      include: { // Archived assets are counted out: this number is "how many of this type are on
+  // the register", which is what an operator checks before renaming a code, and
+  // a record they created by mistake is not on the register.
+  _count: { select: { assets: { where: { archivedAt: null } } } } },
     });
 
     const changes = diffFields(existing, input);

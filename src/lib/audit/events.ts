@@ -19,8 +19,18 @@ export const AUDIT_ACTIONS = {
   ASSET_CREATED: "ASSET_CREATED",
   ASSET_UPDATED: "ASSET_UPDATED",
   ASSET_RETIRED: "ASSET_RETIRED",
+  /** Soft delete: the record itself was a mistake, not a device out of service. */
+  ASSET_ARCHIVED: "ASSET_ARCHIVED",
   ASSET_IMAGE_UPLOADED: "ASSET_IMAGE_UPLOADED",
   ASSET_IMAGE_REMOVED: "ASSET_IMAGE_REMOVED",
+
+  // Device passwords. Recorded separately from ASSET_UPDATED because the value
+  // never appears in `changes`, so "who set it" and "who read it back" are the
+  // only two questions these rows can answer — and the second one is the whole
+  // point of storing a reversible credential at all.
+  ASSET_PASSWORD_SET: "ASSET_PASSWORD_SET",
+  ASSET_PASSWORD_REVEALED: "ASSET_PASSWORD_REVEALED",
+  ASSET_PASSWORD_CLEARED: "ASSET_PASSWORD_CLEARED",
 
   ASSET_TYPE_CREATED: "ASSET_TYPE_CREATED",
   ASSET_TYPE_UPDATED: "ASSET_TYPE_UPDATED",
@@ -96,6 +106,11 @@ const REDACTED_KEYS = new Set([
   "newpassword",
   "currentpassword",
   "passwordhash",
+  // A device password under its own name, and the column it lives in. Both are
+  // here so that a future caller passing an asset row straight through does not
+  // have to remember this module exists.
+  "devicepassword",
+  "passwordciphertext",
   "token",
   "sessiontoken",
   "authorization",

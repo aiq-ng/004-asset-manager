@@ -523,6 +523,83 @@ Errors: `404`, `409` (currently assigned).
 
 ---
 
+## Device passwords
+
+The password an asset itself is protected by. Stored in plaintext in the
+database — a deliberate trade, chosen over encryption so there is no key to
+back up or lose (losing the key would lose every stored password at once). The
+compensating controls: the value never appears in any list or detail DTO or on
+the public tag page, it is readable only through this ADMIN-gated endpoint, and
+every verb is audited, including failed reads.
+
+### `GET /api/assets/[id]/password`
+
+*Requires: `ADMIN`.*
+
+Returns the stored plaintext, once, per call. Returns `404` when nothing is
+stored. Whether a password exists, and when and by whom it was set, is on the
+asset's own DTO (`devicePassword`), so a client can render that metadata without
+touching this endpoint.
+
+```bash
+curl -b cookies.txt http://localhost:3000/api/assets/IT-LAP-0002/password
+```
+
+```json
+{ "data": { "password": "LAP-UZJT-EESH" } }
+```
+
+Errors: `401`, `403` (below ADMIN), `404` (asset or password not found).
+
+### `POST /api/assets/[id]/password`
+
+*Requires: `ADMIN`.*
+
+Stores a password. Either `{ "generate": true }` — a fresh readable code keyed on
+the asset type (`LAP-UZJT-EESH`) — or `{ "password": "..." }` (≥ 6 characters
+after trimming) for one already configured on the device. Both return the
+plaintext that is now stored, so a client never needs a second, separately
+audited reveal to display what it just set.
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/api/assets/IT-LAP-0002/password \
+  -H 'content-type: application/json' -d '{"generate":true}'
+```
+
+```json
+{
+  "data": {
+    "password": "LAP-UZJT-EESH",
+    "status": { "setAt": "2026-10-06T05:38:29.283Z", "setBy": "Ana Ribeiro" }
+  }
+}
+```
+
+Errors: `400` (empty body, or password below the minimum length), `404`.
+
+### `DELETE /api/assets/[id]/password`
+
+*Requires: `ADMIN`.*
+
+Forgets a stored password, for a device that no longer uses it. `404` when
+nothing is stored.
+
+```bash
+curl -b cookies.txt -X DELETE http://localhost:3000/api/assets/IT-LAP-0002/password
+```
+
+```json
+{ "data": { "cleared": true } }
+```
+
+Errors: `404`.
+
+The audit trail records three actions here: `ASSET_PASSWORD_SET` (with `source`
+of `generated` or `manual`, never the value), `ASSET_PASSWORD_REVEALED` (with an
+`outcome` of `revealed` or `unreadable`), and `ASSET_PASSWORD_CLEARED`. See the
+audit section for reading them.
+---
+
 ## Images
 
 ### `POST /api/assets/[id]/image`
@@ -907,7 +984,7 @@ falls back to zeros with `workerRunning: false` rather than the request failing.
 | Asset types | `ASSET_TYPE_CREATED`, `ASSET_TYPE_UPDATED`                                                   |
 | Staff       | `STAFF_CREATED`, `STAFF_UPDATED`, `STAFF_ROLE_CHANGED`, `STAFF_PASSWORD_RESET`, `STAFF_DELETED` |
 | Assignments | `ASSIGNMENT_CREATED`, `ASSIGNMENT_RETURNED`                                                  |
-| Security    | `AUTHORIZATION_DENIED` (a `403`, naming the account and the permission it wanted)            |
+| Security    | `AUTHORIZATION_DENIED` (a `403`, naming the account and the permission it wanted), `ASSET_PASSWORD_SET` (`source` of `generated`/`manual`), `ASSET_PASSWORD_REVEALED` (`outcome` of `revealed`/`unreadable`), `ASSET_PASSWORD_CLEARED` |
 | Departments  | `DEPARTMENT_CREATED`, `DEPARTMENT_RENAMED`, `DEPARTMENT_DELETED`                              |
 
 Guarantees and limits:
@@ -915,7 +992,7 @@ Guarantees and limits:
 - **Append-only.** Database triggers reject `UPDATE` and `DELETE` on `"AuditLog"`; the one exception is the foreign key's `ON DELETE SET NULL` unlink, so a deleted account still leaves a readable row.
 - **Idempotent.** A replayed job upserts on `eventId` instead of inserting.
 - **Retried.** 5 attempts with exponential backoff (2s → 32s) if the worker or database is briefly unavailable.
-- **No secrets.** Passwords, tokens and secrets are replaced with `[redacted]` before an event is queued.
+- **No secrets.** Passwords, tokens and secrets are replaced with `[redacted]` before an event is queued. Device-password events never carry the value at all — the password lives in an encrypted column, and the rows record only that it changed, when, and by whom.
 - **Fail-open.** If Redis is down the API keeps working and the enqueue is bounded at 1s, after which a circuit breaker pauses auditing for 30s. Events during that window are lost — availability of the API wins over completeness of the trail.
 - **Observable.** A worker that is down does not break anything, which is what makes it easy to miss. `/audit` shows a banner with the number of queued events, and `meta.worker` above is the machine-readable form of the same signal.
 

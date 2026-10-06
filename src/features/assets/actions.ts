@@ -5,6 +5,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 
 import { defineAction, actionRequestContext, toFailure } from "@/lib/server/define-action";
 import {
+  archiveAsset,
   createAsset,
   createAssetsInBulk,
   removeAssetImage,
@@ -14,6 +15,12 @@ import {
   type BulkAssetResult,
 } from "@/lib/services/assets";
 import { createAssignment, returnAssignment } from "@/lib/services/assignments";
+import {
+  clearDevicePassword,
+  generateAndSetDevicePassword,
+  revealDevicePassword,
+  setDevicePassword,
+} from "@/lib/services/asset-passwords";
 import { REGISTERED_PROMPT_PARAM } from "@/features/assets/registered-prompt-param";
 import { parseUploadedImage } from "@/lib/services/images";
 import type { AssetDto } from "@/lib/services/serializers";
@@ -21,6 +28,8 @@ import {
   bulkAssetEntrySchema,
   bulkAssetSubmitSchema,
   createAssetSchema,
+  devicePasswordRefSchema,
+  setDevicePasswordSchema,
   updateAssetSchema,
   updateAssetStatusSchema,
 } from "@/lib/validators/asset";
@@ -277,6 +286,121 @@ export const retireAssetAction = defineAction(
   assetRefSchema,
   ({ assetId }) => retireAsset(assetId),
   { route: "action:retireAsset", permission: "asset:manage", successMessage: "Asset retired." },
+);
+
+/**
+ * Stores a device password somebody typed themselves.
+ *
+ * `asset:manage`, i.e. ADMIN and up. Not a dedicated permission: reading and
+ * writing the password of any device in the building is the same authority as
+ * editing the record that describes it, and grading them separately would only
+ * create the possibility of an admin who can retitle a laptop but cannot open it.
+ *
+ * Returns the trimmed password alongside the status metadata — the service does
+ * the trimming and echoes exactly what it stored, so the form can show what is now
+ * on the device without a second, separately-audited reveal round trip. The same
+ * `{ password, status }` contract as the generate action, which is what lets the
+ * credentials card adopt either result with one piece of code.
+ */
+export const setDevicePasswordAction = defineAction(
+  setDevicePasswordSchema,
+  ({ assetId, password }, actor) => setDevicePassword(assetId, password, actor),
+  {
+    route: "action:setDevicePassword",
+    permission: "asset:manage",
+    successMessage: "Device password saved.",
+  },
+);
+
+/**
+ * Generates a new device password, stores it, and returns it once.
+ *
+ * The plaintext comes back in `data` because that is the only moment the caller
+ * can learn it without a second decrypting read — which would also write a
+ * second "revealed" audit row and make a routine regeneration look like somebody
+ * went looking through the credentials. The service audits the set; this path
+ * deliberately does not also audit a reveal.
+ */
+export const generateDevicePasswordAction = defineAction(
+  devicePasswordRefSchema,
+  ({ assetId }, actor) => generateAndSetDevicePassword(assetId, actor),
+  {
+    route: "action:generateDevicePassword",
+    permission: "asset:manage",
+    successMessage: "Device password generated.",
+  },
+);
+
+/**
+ * Reads a stored device password back.
+ *
+ * `revalidate: false` because nothing on the page changed: a reveal returns a
+ * value, it does not mutate the asset. Refreshing anyway would re-run the whole
+ * route and replace the password the operator is reading with the masked form.
+ *
+ * The value is still held in action state for as long as the component lives,
+ * which is why the credentials card clears it when it is dismissed.
+ */
+export const revealDevicePasswordAction = defineAction(
+  devicePasswordRefSchema,
+  ({ assetId }) => revealDevicePassword(assetId),
+  {
+    route: "action:revealDevicePassword",
+    permission: "asset:manage",
+    successMessage: "Password revealed.",
+    revalidate: false,
+  },
+);
+
+/** Clears a stored device password, for a device that no longer uses it. */
+export const clearDevicePasswordAction = defineAction(
+  devicePasswordRefSchema,
+  ({ assetId }) => clearDevicePassword(assetId),
+  {
+    route: "action:clearDevicePassword",
+    permission: "asset:manage",
+    successMessage: "Device password cleared.",
+  },
+);
+
+/**
+ * Archives a record created by mistake, taking it off the register.
+ *
+ * `asset:manage` (ADMIN and up), same as the other asset mutations: archiving is
+ * the correction for a row somebody with that permission created, and grading it
+ * any lower would leave exactly the mistakes this exists to fix with nowhere to
+ * go. The actor is passed through rather than read again inside the service, so
+ * the row records who archived it from the same session that authorised the call.
+ */
+export const archiveAssetAction = defineAction(
+  assetRefSchema,
+  ({ assetId }, actor) => archiveAsset(assetId, actor),
+  {
+    route: "action:archiveAsset",
+    permission: "asset:manage",
+    successMessage: "Asset archived.",
+  },
+);
+
+/**
+ * The same archive, for the detail page.
+ *
+ * Separate from `archiveAssetAction` only because of where it lands. On the
+ * register a plain refresh is right — the row simply stops being there. On the
+ * asset's own page the record has just stopped existing, so refreshing would
+ * render the 404 that `getAsset` now returns for it, and an operator who did
+ * exactly what the button said would be met by an error page. Redirecting to the
+ * register shows them the outcome instead.
+ */
+export const archiveAssetAndLeaveAction = defineAction(
+  assetRefSchema,
+  ({ assetId }, actor) => archiveAsset(assetId, actor),
+  {
+    route: "action:archiveAssetAndLeave",
+    permission: "asset:manage",
+    successMessage: "Asset archived.",
+    redirect: () => "/assets",
+  },
 );
 
 export const assignAssetAction = defineAction(

@@ -108,7 +108,12 @@ export async function createAssignment(
   input: CreateAssignmentInput,
   actor: Actor,
 ): Promise<AssignmentDto> {
-  const asset = await prisma.asset.findUnique({ where: toAssetWhere(input.assetId) });
+  // `archivedAt: null` as well as the identifier: an archived row is not on the
+  // register, so handing it to somebody would put a device in circulation that
+  // no screen lists any more.
+  const asset = await prisma.asset.findFirst({
+    where: { ...toAssetWhere(input.assetId), archivedAt: null },
+  });
   if (!asset) throw ApiError.notFound(`Asset ${input.assetId} not found`);
 
   const staff = await prisma.staff.findUnique({
@@ -290,6 +295,10 @@ export async function listAssignments(
   query: ListAssignmentsQuery,
 ): Promise<{ items: AssignmentDto[]; total: number; page: number; pageSize: number }> {
   const where = {
+    // An archived asset leaves the register, and with it this list: the row is
+    // hidden everywhere an operator would otherwise see it. Its history stays in
+    // the database and in the audit trail.
+    asset: { archivedAt: null },
     // `q` spans the joined asset and staff rows, so a search finds either the
     // asset id or the person holding it.
     ...(query.q
